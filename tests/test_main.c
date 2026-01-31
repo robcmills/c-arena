@@ -1,0 +1,482 @@
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
+#include "../src/core/types.h"
+#include "../src/core/arena.h"
+#include "../src/core/player.h"
+#include "../src/core/combat.h"
+#include "../src/core/game.h"
+#include "../src/core/api.h"
+
+// Simple test framework
+static int tests_run = 0;
+static int tests_passed = 0;
+
+#define TEST(name) void name(void)
+#define RUN_TEST(name) do { \
+    printf("  Running %s... ", #name); \
+    tests_run++; \
+    name(); \
+    tests_passed++; \
+    printf("PASSED\n"); \
+} while(0)
+
+#define ASSERT(cond) do { \
+    if (!(cond)) { \
+        printf("FAILED\n    Assertion failed: %s\n    at %s:%d\n", \
+               #cond, __FILE__, __LINE__); \
+        return; \
+    } \
+} while(0)
+
+#define ASSERT_EQ(a, b) do { \
+    if ((a) != (b)) { \
+        printf("FAILED\n    Expected %d == %d\n    at %s:%d\n", \
+               (int)(a), (int)(b), __FILE__, __LINE__); \
+        return; \
+    } \
+} while(0)
+
+// Test map
+static const char* TEST_MAP =
+    "x # # # # # x\n"
+    "x . . . . * x\n"
+    "x 1 . . . . x\n"
+    "x . . . . . x\n"
+    "x . . . . 2 x\n"
+    "x * . . . . x\n"
+    "x # # # # # x\n";
+
+// =============================================================================
+// Arena Tests
+// =============================================================================
+
+TEST(test_arena_load) {
+    Arena arena;
+    bool result = arena_load_from_string(&arena, TEST_MAP);
+    ASSERT(result);
+    ASSERT_EQ(arena.width, 7);
+    ASSERT_EQ(arena.height, 7);
+
+    // Check corners are void
+    ASSERT_EQ(arena_get_tile(&arena, 0, 0), TILE_VOID);
+    ASSERT_EQ(arena_get_tile(&arena, 6, 0), TILE_VOID);
+
+    // Check walls
+    ASSERT_EQ(arena_get_tile(&arena, 1, 0), TILE_WALL);
+    ASSERT_EQ(arena_get_tile(&arena, 5, 0), TILE_WALL);
+
+    // Check floors
+    ASSERT_EQ(arena_get_tile(&arena, 1, 1), TILE_FLOOR);
+    ASSERT_EQ(arena_get_tile(&arena, 3, 3), TILE_FLOOR);
+
+    // Check spawn points (should be floor)
+    ASSERT_EQ(arena_get_tile(&arena, 1, 2), TILE_FLOOR);
+    ASSERT_EQ(arena_get_tile(&arena, 5, 4), TILE_FLOOR);
+
+    // Check crystal positions (should be floor)
+    ASSERT_EQ(arena_get_tile(&arena, 5, 1), TILE_FLOOR);
+    ASSERT_EQ(arena_get_tile(&arena, 1, 5), TILE_FLOOR);
+
+    // Check spawn point count
+    ASSERT_EQ(arena.num_spawn_points, 2);
+    ASSERT_EQ(arena.spawn_points[0].pos.x, 1);
+    ASSERT_EQ(arena.spawn_points[0].pos.y, 2);
+    ASSERT_EQ(arena.spawn_points[1].pos.x, 5);
+    ASSERT_EQ(arena.spawn_points[1].pos.y, 4);
+
+    // Check crystal count
+    ASSERT_EQ(arena.num_crystals, 2);
+}
+
+TEST(test_arena_passable) {
+    Arena arena;
+    arena_load_from_string(&arena, TEST_MAP);
+
+    ASSERT(arena_is_passable(&arena, 2, 2));   // Floor
+    ASSERT(!arena_is_passable(&arena, 0, 0));  // Void
+    ASSERT(!arena_is_passable(&arena, 1, 0));  // Wall
+}
+
+TEST(test_arena_crystal) {
+    Arena arena;
+    arena_load_from_string(&arena, TEST_MAP);
+
+    int crystal_idx = arena_get_crystal_at(&arena, 5, 1);
+    ASSERT(crystal_idx >= 0);
+    ASSERT(arena_crystal_available(&arena, crystal_idx));
+
+    arena_collect_crystal(&arena, crystal_idx);
+    ASSERT(!arena_crystal_available(&arena, crystal_idx));
+
+    // Tick down the cooldown
+    for (int i = 0; i < CRYSTAL_RESPAWN_TICKS; i++) {
+        arena_tick_crystals(&arena);
+    }
+    ASSERT(arena_crystal_available(&arena, crystal_idx));
+}
+
+// =============================================================================
+// Player Tests
+// =============================================================================
+
+TEST(test_player_init) {
+    Player player;
+    Position spawn = {5, 5};
+    player_init(&player, spawn);
+
+    ASSERT_EQ(player.pos.x, 5);
+    ASSERT_EQ(player.pos.y, 5);
+    ASSERT_EQ(player.health, STARTING_HEALTH);
+    ASSERT_EQ(player.energy, STARTING_ENERGY);
+    ASSERT(player.alive);
+    ASSERT(player_can_move(&player));
+    ASSERT(player_can_shoot(&player));
+}
+
+TEST(test_player_damage) {
+    Player player;
+    Position spawn = {0, 0};
+    player_init(&player, spawn);
+
+    player_take_damage(&player, 1);
+    ASSERT_EQ(player.health, 3);
+    ASSERT(player.alive);
+
+    player_take_damage(&player, 3);
+    ASSERT_EQ(player.health, 0);
+    ASSERT(!player.alive);
+}
+
+TEST(test_player_cooldowns) {
+    Player player;
+    Position spawn = {0, 0};
+    player_init(&player, spawn);
+
+    ASSERT(player_can_move(&player));
+    player_start_move_cooldown(&player);
+    ASSERT(!player_can_move(&player));
+
+    // Tick down cooldown
+    for (int i = 0; i < MOVEMENT_COOLDOWN_TICKS; i++) {
+        player_tick_cooldowns(&player);
+    }
+    ASSERT(player_can_move(&player));
+}
+
+TEST(test_player_energy) {
+    Player player;
+    Position spawn = {0, 0};
+    player_init(&player, spawn);
+
+    ASSERT_EQ(player.energy, 8);
+    ASSERT(player_use_energy(&player, 1));
+    ASSERT_EQ(player.energy, 7);
+
+    // Use all energy
+    for (int i = 0; i < 7; i++) {
+        player_use_energy(&player, 1);
+    }
+    ASSERT_EQ(player.energy, 0);
+    ASSERT(!player_use_energy(&player, 1));  // Should fail
+}
+
+// =============================================================================
+// Combat Tests
+// =============================================================================
+
+TEST(test_combat_fire_laser_hit) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+
+    // Player 0 at (1, 2), Player 1 at (5, 4)
+    // Move player 1 to be in line with player 0
+    state.players[1].pos.x = 4;
+    state.players[1].pos.y = 2;
+
+    // Fire right from player 0
+    LaserResult result = combat_fire_laser(&state, 0, DIR_RIGHT);
+
+    ASSERT(result.hit);
+    ASSERT_EQ(result.target_player, 1);
+    ASSERT_EQ(result.hit_position.x, 4);
+    ASSERT_EQ(result.hit_position.y, 2);
+}
+
+TEST(test_combat_fire_laser_blocked_by_wall) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+
+    // Fire up from player 0 (at 1, 2) - should hit wall at (1, 0)
+    LaserResult result = combat_fire_laser(&state, 0, DIR_UP);
+
+    ASSERT(!result.hit);
+}
+
+TEST(test_combat_pushback) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+
+    // Place player 1 at (3, 3)
+    state.players[1].pos.x = 3;
+    state.players[1].pos.y = 3;
+
+    bool fragged = false;
+    Position new_pos = combat_apply_pushback(&state, 1, DIR_RIGHT, 1, &fragged);
+
+    ASSERT(!fragged);
+    ASSERT_EQ(new_pos.x, 4);
+    ASSERT_EQ(new_pos.y, 3);
+}
+
+TEST(test_combat_pushback_into_wall) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+
+    // Place player 1 at (1, 1) - wall is at x=0
+    // But x=0 is void in our map, and x=1, y=0 is wall
+    // Let's use (5, 1) and push right toward void at (6, 1)
+    state.players[1].pos.x = 5;
+    state.players[1].pos.y = 1;
+
+    bool fragged = false;
+    Position new_pos = combat_apply_pushback(&state, 1, DIR_RIGHT, 1, &fragged);
+
+    // Should be pushed into void
+    ASSERT(fragged);
+}
+
+// =============================================================================
+// Game Tests
+// =============================================================================
+
+TEST(test_game_init) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+
+    ASSERT_EQ(state.current_tick, 0);
+    ASSERT_EQ(state.winner, -1);
+    ASSERT(!state.game_over);
+
+    // Players should be at spawn points
+    ASSERT_EQ(state.players[0].pos.x, 1);
+    ASSERT_EQ(state.players[0].pos.y, 2);
+    ASSERT_EQ(state.players[1].pos.x, 5);
+    ASSERT_EQ(state.players[1].pos.y, 4);
+}
+
+TEST(test_game_step_movement) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+
+    // Player 0 moves right
+    PlayerAction actions[2] = {
+        {ACTION_RIGHT, ACTION_NOOP},
+        {ACTION_NOOP, ACTION_NOOP}
+    };
+
+    game_step(&state, actions);
+
+    ASSERT_EQ(state.players[0].pos.x, 2);
+    ASSERT_EQ(state.players[0].pos.y, 2);
+}
+
+TEST(test_game_step_shooting) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+
+    // Place players in line
+    state.players[0].pos.x = 2;
+    state.players[0].pos.y = 3;
+    state.players[1].pos.x = 4;
+    state.players[1].pos.y = 3;
+
+    // Player 0 shoots right
+    PlayerAction actions[2] = {
+        {ACTION_NOOP, ACTION_RIGHT},
+        {ACTION_NOOP, ACTION_NOOP}
+    };
+
+    StepInfo info = game_step(&state, actions);
+
+    ASSERT(info.player_hit[1]);
+    ASSERT_EQ(state.players[1].health, 3);
+    ASSERT_EQ(state.players[1].pos.x, 5);  // Pushed right
+}
+
+TEST(test_game_simultaneous_shoot) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+
+    // Place players facing each other
+    state.players[0].pos.x = 2;
+    state.players[0].pos.y = 3;
+    state.players[1].pos.x = 4;
+    state.players[1].pos.y = 3;
+
+    // Both shoot at each other
+    PlayerAction actions[2] = {
+        {ACTION_NOOP, ACTION_RIGHT},
+        {ACTION_NOOP, ACTION_LEFT}
+    };
+
+    StepInfo info = game_step(&state, actions);
+
+    // Both should be hit
+    ASSERT(info.player_hit[0]);
+    ASSERT(info.player_hit[1]);
+    ASSERT_EQ(state.players[0].health, 3);
+    ASSERT_EQ(state.players[1].health, 3);
+}
+
+TEST(test_game_movement_collision) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+
+    // Place players adjacent
+    state.players[0].pos.x = 2;
+    state.players[0].pos.y = 3;
+    state.players[1].pos.x = 4;
+    state.players[1].pos.y = 3;
+
+    // Both try to move to (3, 3)
+    PlayerAction actions[2] = {
+        {ACTION_RIGHT, ACTION_NOOP},
+        {ACTION_LEFT, ACTION_NOOP}
+    };
+
+    game_step(&state, actions);
+
+    // Both should stay in place
+    ASSERT_EQ(state.players[0].pos.x, 2);
+    ASSERT_EQ(state.players[1].pos.x, 4);
+}
+
+TEST(test_game_crystal_collection) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+
+    // Use some energy first
+    state.players[0].energy = 3;
+
+    // Move player 0 to crystal position (1, 5)
+    state.players[0].pos.x = 1;
+    state.players[0].pos.y = 4;
+
+    PlayerAction actions[2] = {
+        {ACTION_DOWN, ACTION_NOOP},
+        {ACTION_NOOP, ACTION_NOOP}
+    };
+
+    StepInfo info = game_step(&state, actions);
+
+    ASSERT(info.crystal_collected[0]);
+    ASSERT_EQ(state.players[0].energy, MAX_ENERGY);
+
+    // Crystal should be on cooldown now
+    int crystal_idx = arena_get_crystal_at(&state.arena, 1, 5);
+    ASSERT(!arena_crystal_available(&state.arena, crystal_idx));
+}
+
+TEST(test_game_frag_and_respawn) {
+    GameState state;
+    game_init(&state, TEST_MAP);
+    api_game_set_seed(42);  // For reproducible respawn
+
+    // Place players
+    state.players[0].pos.x = 2;
+    state.players[0].pos.y = 3;
+    state.players[1].pos.x = 4;
+    state.players[1].pos.y = 3;
+    state.players[1].health = 1;
+
+    // Player 0 shoots player 1 who has 1 health
+    PlayerAction actions[2] = {
+        {ACTION_NOOP, ACTION_RIGHT},
+        {ACTION_NOOP, ACTION_NOOP}
+    };
+
+    StepInfo info = game_step(&state, actions);
+
+    ASSERT(info.player_fragged[1]);
+    ASSERT_EQ(state.players[0].score, 1);
+    ASSERT(state.players[1].alive);  // Should have respawned
+    ASSERT_EQ(state.players[1].health, MAX_HEALTH);
+}
+
+// =============================================================================
+// API Tests
+// =============================================================================
+
+TEST(test_api_basic) {
+    GameState state;
+    api_game_init(&state, TEST_MAP);
+
+    ASSERT_EQ(api_get_arena_width(&state), 7);
+    ASSERT_EQ(api_get_arena_height(&state), 7);
+    ASSERT_EQ(api_get_player_health(&state, 0), 4);
+    ASSERT_EQ(api_get_player_energy(&state, 0), 8);
+    ASSERT(!api_is_game_over(&state));
+}
+
+TEST(test_api_step) {
+    GameState state;
+    api_game_init(&state, TEST_MAP);
+
+    // Player 0 moves right, player 1 does nothing
+    int actions[4] = {ACTION_RIGHT, ACTION_NOOP, ACTION_NOOP, ACTION_NOOP};
+
+    api_game_step(&state, actions);
+
+    ASSERT_EQ(api_get_player_x(&state, 0), 2);
+    ASSERT_EQ(api_get_current_tick(&state), 1);
+}
+
+// =============================================================================
+// Main
+// =============================================================================
+
+int main(void) {
+    printf("Running Arena Game Engine Tests\n");
+    printf("================================\n\n");
+
+    printf("Arena Tests:\n");
+    RUN_TEST(test_arena_load);
+    RUN_TEST(test_arena_passable);
+    RUN_TEST(test_arena_crystal);
+    printf("\n");
+
+    printf("Player Tests:\n");
+    RUN_TEST(test_player_init);
+    RUN_TEST(test_player_damage);
+    RUN_TEST(test_player_cooldowns);
+    RUN_TEST(test_player_energy);
+    printf("\n");
+
+    printf("Combat Tests:\n");
+    RUN_TEST(test_combat_fire_laser_hit);
+    RUN_TEST(test_combat_fire_laser_blocked_by_wall);
+    RUN_TEST(test_combat_pushback);
+    RUN_TEST(test_combat_pushback_into_wall);
+    printf("\n");
+
+    printf("Game Tests:\n");
+    RUN_TEST(test_game_init);
+    RUN_TEST(test_game_step_movement);
+    RUN_TEST(test_game_step_shooting);
+    RUN_TEST(test_game_simultaneous_shoot);
+    RUN_TEST(test_game_movement_collision);
+    RUN_TEST(test_game_crystal_collection);
+    RUN_TEST(test_game_frag_and_respawn);
+    printf("\n");
+
+    printf("API Tests:\n");
+    RUN_TEST(test_api_basic);
+    RUN_TEST(test_api_step);
+    printf("\n");
+
+    printf("================================\n");
+    printf("Results: %d/%d tests passed\n", tests_passed, tests_run);
+
+    return (tests_passed == tests_run) ? 0 : 1;
+}
