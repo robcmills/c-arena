@@ -1,3 +1,7 @@
+# arena project
+build/
+lib/
+
 # Prerequisites
 *.d
 
