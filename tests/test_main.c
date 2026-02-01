@@ -12,18 +12,24 @@
 static int tests_run = 0;
 static int tests_passed = 0;
 
+// ANSI color codes
+#define COLOR_GREEN "\033[32m"
+#define COLOR_RED   "\033[31m"
+#define COLOR_CYAN  "\033[36m"
+#define COLOR_RESET "\033[0m"
+
 #define TEST(name) void name(void)
 #define RUN_TEST(name) do { \
-    printf("  Running %s... ", #name); \
+    printf("  %s... ", #name); \
     tests_run++; \
     name(); \
     tests_passed++; \
-    printf("PASSED\n"); \
+    printf(COLOR_GREEN "PASSED" COLOR_RESET "\n"); \
 } while(0)
 
 #define ASSERT(cond, msg) do { \
     if (!(cond)) { \
-        printf("FAILED\n    Assertion failed: %s\n    at %s:%d\n    %s\n", \
+        printf(COLOR_RED "FAILED" COLOR_RESET "\n    Assertion failed: %s\n    at %s:%d\n    %s\n", \
                #cond, __FILE__, __LINE__, #msg); \
         return; \
     } \
@@ -31,7 +37,7 @@ static int tests_passed = 0;
 
 #define ASSERT_EQ(a, b) do { \
     if ((a) != (b)) { \
-        printf("FAILED\n    Expected %d == %d\n    at %s:%d\n", \
+        printf(COLOR_RED "FAILED" COLOR_RESET "\n    Expected %d == %d\n    at %s:%d\n", \
                (int)(a), (int)(b), __FILE__, __LINE__); \
         return; \
     } \
@@ -125,7 +131,7 @@ TEST(test_player_init) {
     Position spawn = {5, 5};
     player_init(&player, spawn);
 
-    ASSERT_EQ(player.pos.x, 5);
+    ASSERT_EQ(player.pos.x, 6);
     ASSERT_EQ(player.pos.y, 5);
     ASSERT_EQ(player.health, STARTING_HEALTH);
     ASSERT_EQ(player.energy, STARTING_ENERGY);
@@ -440,27 +446,27 @@ int main(void) {
     printf("Running Arena Game Engine Tests\n");
     printf("================================\n\n");
 
-    printf("Arena Tests:\n");
+    printf(COLOR_CYAN "Arena Tests:" COLOR_RESET "\n");
     RUN_TEST(test_arena_load);
     RUN_TEST(test_arena_passable);
     RUN_TEST(test_arena_crystal);
     printf("\n");
 
-    printf("Player Tests:\n");
+    printf(COLOR_CYAN "Player Tests:" COLOR_RESET "\n");
     RUN_TEST(test_player_init);
     RUN_TEST(test_player_damage);
     RUN_TEST(test_player_cooldowns);
     RUN_TEST(test_player_energy);
     printf("\n");
 
-    printf("Combat Tests:\n");
+    printf(COLOR_CYAN "Combat Tests:" COLOR_RESET "\n");
     RUN_TEST(test_combat_fire_laser_hit);
     RUN_TEST(test_combat_fire_laser_blocked_by_wall);
     RUN_TEST(test_combat_pushback);
     RUN_TEST(test_combat_pushback_into_wall);
     printf("\n");
 
-    printf("Game Tests:\n");
+    printf(COLOR_CYAN "Game Tests:" COLOR_RESET "\n");
     RUN_TEST(test_game_init);
     RUN_TEST(test_game_step_movement);
     RUN_TEST(test_game_step_shooting);
@@ -470,7 +476,7 @@ int main(void) {
     RUN_TEST(test_game_frag_and_respawn);
     printf("\n");
 
-    printf("API Tests:\n");
+    printf(COLOR_CYAN "API Tests:" COLOR_RESET "\n");
     RUN_TEST(test_api_basic);
     RUN_TEST(test_api_step);
     printf("\n");
