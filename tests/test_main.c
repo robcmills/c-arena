@@ -21,10 +21,10 @@ static int tests_passed = 0;
     printf("PASSED\n"); \
 } while(0)
 
-#define ASSERT(cond) do { \
+#define ASSERT(cond, msg) do { \
     if (!(cond)) { \
-        printf("FAILED\n    Assertion failed: %s\n    at %s:%d\n", \
-               #cond, __FILE__, __LINE__); \
+        printf("FAILED\n    Assertion failed: %s\n    at %s:%d\n    %s\n", \
+               #cond, __FILE__, __LINE__, #msg); \
         return; \
     } \
 } while(0)
@@ -54,7 +54,7 @@ static const char* TEST_MAP =
 TEST(test_arena_load) {
     Arena arena;
     bool result = arena_load_from_string(&arena, TEST_MAP);
-    ASSERT(result);
+    ASSERT(result, "Failed to load arena from string");
     ASSERT_EQ(arena.width, 7);
     ASSERT_EQ(arena.height, 7);
 
@@ -93,9 +93,9 @@ TEST(test_arena_passable) {
     Arena arena;
     arena_load_from_string(&arena, TEST_MAP);
 
-    ASSERT(arena_is_passable(&arena, 2, 2));   // Floor
-    ASSERT(!arena_is_passable(&arena, 0, 0));  // Void
-    ASSERT(!arena_is_passable(&arena, 1, 0));  // Wall
+    ASSERT(arena_is_passable(&arena, 2, 2), "Floor");
+    ASSERT(!arena_is_passable(&arena, 0, 0), "Void");
+    ASSERT(!arena_is_passable(&arena, 1, 0), "Wall");
 }
 
 TEST(test_arena_crystal) {
@@ -103,17 +103,17 @@ TEST(test_arena_crystal) {
     arena_load_from_string(&arena, TEST_MAP);
 
     int crystal_idx = arena_get_crystal_at(&arena, 5, 1);
-    ASSERT(crystal_idx >= 0);
-    ASSERT(arena_crystal_available(&arena, crystal_idx));
+    ASSERT(crystal_idx >= 0, "Crystal should exist at position");
+    ASSERT(arena_crystal_available(&arena, crystal_idx), "Crystal should be available initially");
 
     arena_collect_crystal(&arena, crystal_idx);
-    ASSERT(!arena_crystal_available(&arena, crystal_idx));
+    ASSERT(!arena_crystal_available(&arena, crystal_idx), "Crystal should not be available after collection");
 
     // Tick down the cooldown
     for (int i = 0; i < CRYSTAL_RESPAWN_TICKS; i++) {
         arena_tick_crystals(&arena);
     }
-    ASSERT(arena_crystal_available(&arena, crystal_idx));
+    ASSERT(arena_crystal_available(&arena, crystal_idx), "Crystal should respawn after cooldown");
 }
 
 // =============================================================================
@@ -129,9 +129,9 @@ TEST(test_player_init) {
     ASSERT_EQ(player.pos.y, 5);
     ASSERT_EQ(player.health, STARTING_HEALTH);
     ASSERT_EQ(player.energy, STARTING_ENERGY);
-    ASSERT(player.alive);
-    ASSERT(player_can_move(&player));
-    ASSERT(player_can_shoot(&player));
+    ASSERT(player.alive, "Player should be alive after init");
+    ASSERT(player_can_move(&player), "Player should be able to move after init");
+    ASSERT(player_can_shoot(&player), "Player should be able to shoot after init");
 }
 
 TEST(test_player_damage) {
@@ -141,11 +141,11 @@ TEST(test_player_damage) {
 
     player_take_damage(&player, 1);
     ASSERT_EQ(player.health, 3);
-    ASSERT(player.alive);
+    ASSERT(player.alive, "Player should be alive with health remaining");
 
     player_take_damage(&player, 3);
     ASSERT_EQ(player.health, 0);
-    ASSERT(!player.alive);
+    ASSERT(!player.alive, "Player should be dead at zero health");
 }
 
 TEST(test_player_cooldowns) {
@@ -153,15 +153,15 @@ TEST(test_player_cooldowns) {
     Position spawn = {0, 0};
     player_init(&player, spawn);
 
-    ASSERT(player_can_move(&player));
+    ASSERT(player_can_move(&player), "Player should be able to move initially");
     player_start_move_cooldown(&player);
-    ASSERT(!player_can_move(&player));
+    ASSERT(!player_can_move(&player), "Player should not be able to move during cooldown");
 
     // Tick down cooldown
     for (int i = 0; i < MOVEMENT_COOLDOWN_TICKS; i++) {
         player_tick_cooldowns(&player);
     }
-    ASSERT(player_can_move(&player));
+    ASSERT(player_can_move(&player), "Player should be able to move after cooldown expires");
 }
 
 TEST(test_player_energy) {
@@ -170,7 +170,7 @@ TEST(test_player_energy) {
     player_init(&player, spawn);
 
     ASSERT_EQ(player.energy, 8);
-    ASSERT(player_use_energy(&player, 1));
+    ASSERT(player_use_energy(&player, 1), "Should successfully use energy");
     ASSERT_EQ(player.energy, 7);
 
     // Use all energy
@@ -178,7 +178,7 @@ TEST(test_player_energy) {
         player_use_energy(&player, 1);
     }
     ASSERT_EQ(player.energy, 0);
-    ASSERT(!player_use_energy(&player, 1));  // Should fail
+    ASSERT(!player_use_energy(&player, 1), "Should fail to use energy when depleted");
 }
 
 // =============================================================================
@@ -197,7 +197,7 @@ TEST(test_combat_fire_laser_hit) {
     // Fire right from player 0
     LaserResult result = combat_fire_laser(&state, 0, DIR_RIGHT);
 
-    ASSERT(result.hit);
+    ASSERT(result.hit, "Laser should hit player in line of fire");
     ASSERT_EQ(result.target_player, 1);
     ASSERT_EQ(result.hit_position.x, 4);
     ASSERT_EQ(result.hit_position.y, 2);
@@ -210,7 +210,7 @@ TEST(test_combat_fire_laser_blocked_by_wall) {
     // Fire up from player 0 (at 1, 2) - should hit wall at (1, 0)
     LaserResult result = combat_fire_laser(&state, 0, DIR_UP);
 
-    ASSERT(!result.hit);
+    ASSERT(!result.hit, "Laser should not hit player when blocked by wall");
 }
 
 TEST(test_combat_pushback) {
@@ -224,7 +224,7 @@ TEST(test_combat_pushback) {
     bool fragged = false;
     Position new_pos = combat_apply_pushback(&state, 1, DIR_RIGHT, 1, &fragged);
 
-    ASSERT(!fragged);
+    ASSERT(!fragged, "Player should not be fragged by pushback into open space");
     ASSERT_EQ(new_pos.x, 4);
     ASSERT_EQ(new_pos.y, 3);
 }
@@ -243,7 +243,7 @@ TEST(test_combat_pushback_into_wall) {
     Position new_pos = combat_apply_pushback(&state, 1, DIR_RIGHT, 1, &fragged);
 
     // Should be pushed into void
-    ASSERT(fragged);
+    ASSERT(fragged, "Player should be fragged when pushed into void");
 }
 
 // =============================================================================
@@ -256,7 +256,7 @@ TEST(test_game_init) {
 
     ASSERT_EQ(state.current_tick, 0);
     ASSERT_EQ(state.winner, -1);
-    ASSERT(!state.game_over);
+    ASSERT(!state.game_over, "Game should not be over at start");
 
     // Players should be at spawn points
     ASSERT_EQ(state.players[0].pos.x, 1);
@@ -299,7 +299,7 @@ TEST(test_game_step_shooting) {
 
     StepInfo info = game_step(&state, actions);
 
-    ASSERT(info.player_hit[1]);
+    ASSERT(info.player_hit[1], "Player 1 should be hit by laser");
     ASSERT_EQ(state.players[1].health, 3);
     ASSERT_EQ(state.players[1].pos.x, 5);  // Pushed right
 }
@@ -323,8 +323,8 @@ TEST(test_game_simultaneous_shoot) {
     StepInfo info = game_step(&state, actions);
 
     // Both should be hit
-    ASSERT(info.player_hit[0]);
-    ASSERT(info.player_hit[1]);
+    ASSERT(info.player_hit[0], "Player 0 should be hit in simultaneous shoot");
+    ASSERT(info.player_hit[1], "Player 1 should be hit in simultaneous shoot");
     ASSERT_EQ(state.players[0].health, 3);
     ASSERT_EQ(state.players[1].health, 3);
 }
@@ -370,12 +370,12 @@ TEST(test_game_crystal_collection) {
 
     StepInfo info = game_step(&state, actions);
 
-    ASSERT(info.crystal_collected[0]);
+    ASSERT(info.crystal_collected[0], "Player 0 should have collected crystal");
     ASSERT_EQ(state.players[0].energy, MAX_ENERGY);
 
     // Crystal should be on cooldown now
     int crystal_idx = arena_get_crystal_at(&state.arena, 1, 5);
-    ASSERT(!arena_crystal_available(&state.arena, crystal_idx));
+    ASSERT(!arena_crystal_available(&state.arena, crystal_idx), "Crystal should be on cooldown after collection");
 }
 
 TEST(test_game_frag_and_respawn) {
@@ -398,9 +398,9 @@ TEST(test_game_frag_and_respawn) {
 
     StepInfo info = game_step(&state, actions);
 
-    ASSERT(info.player_fragged[1]);
+    ASSERT(info.player_fragged[1], "Player 1 should be fragged");
     ASSERT_EQ(state.players[0].score, 1);
-    ASSERT(state.players[1].alive);  // Should have respawned
+    ASSERT(state.players[1].alive, "Player 1 should have respawned");
     ASSERT_EQ(state.players[1].health, MAX_HEALTH);
 }
 
@@ -416,7 +416,7 @@ TEST(test_api_basic) {
     ASSERT_EQ(api_get_arena_height(&state), 7);
     ASSERT_EQ(api_get_player_health(&state, 0), 4);
     ASSERT_EQ(api_get_player_energy(&state, 0), 8);
-    ASSERT(!api_is_game_over(&state));
+    ASSERT(!api_is_game_over(&state), "Game should not be over after init");
 }
 
 TEST(test_api_step) {
