@@ -220,30 +220,27 @@ TEST(test_player_energy) {
 
 TEST(test_combat_fire_laser_hit) {
     GameState state;
-    game_init(&state, TEST_MAP_ASCII);
+    game_init(&state, "1 . . 2 .");
 
-    // Player 0 at (1, 2), Player 1 at (5, 4)
-    // Move player 1 to be in line with player 0
-    state.players[1].pos.x = 4;
-    state.players[1].pos.y = 2;
-
-    // Fire right from player 0
+    // Fire right from player 1
     LaserResult result = combat_fire_laser(&state, 0, DIR_RIGHT);
 
     ASSERT(result.hit, "Laser should hit player in line of fire");
     ASSERT_EQ(result.target_player, 1);
-    ASSERT_EQ(result.hit_position.x, 4);
-    ASSERT_EQ(result.hit_position.y, 2);
+    ASSERT_EQ(result.hit_position.x, 3);
+    ASSERT_EQ(result.hit_position.y, 0);
+    ASSERT_EQ(result.pushback_to.x, 4);
+    ASSERT_EQ(result.pushback_to.y, 0);
+    ASSERT(!result.target_fragged, "Player should not be fragged");
 }
 
 TEST(test_combat_fire_laser_blocked_by_wall) {
     GameState state;
-    game_init(&state, TEST_MAP_ASCII);
-
-    // Fire up from player 0 (at 1, 2) - should hit wall at (1, 0)
-    LaserResult result = combat_fire_laser(&state, 0, DIR_UP);
-
+    game_init(&state, "1 # 2");
+    LaserResult result = combat_fire_laser(&state, 0, DIR_RIGHT);
     ASSERT(!result.hit, "Laser should not hit player when blocked by wall");
+    ASSERT_EQ(result.hit_position.x, 1);
+    ASSERT_EQ(result.hit_position.y, 0);
 }
 
 TEST(test_combat_pushback) {
@@ -273,7 +270,7 @@ TEST(test_combat_pushback_into_wall) {
     state.players[1].pos.y = 1;
 
     bool fragged = false;
-    Position new_pos = combat_apply_pushback(&state, 1, DIR_RIGHT, 1, &fragged);
+    combat_apply_pushback(&state, 1, DIR_RIGHT, 1, &fragged);
 
     // Should be pushed into void
     ASSERT(fragged, "Player should be fragged when pushed into void");
