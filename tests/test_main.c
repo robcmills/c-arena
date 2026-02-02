@@ -11,6 +11,7 @@
 // Simple test framework
 static int tests_run = 0;
 static int tests_passed = 0;
+static int current_test_failed = 0;
 
 // ANSI color codes
 #define COLOR_GREEN "\033[32m"
@@ -22,15 +23,19 @@ static int tests_passed = 0;
 #define RUN_TEST(name) do { \
     printf("  %s... ", #name); \
     tests_run++; \
+    current_test_failed = 0; \
     name(); \
-    tests_passed++; \
-    printf(COLOR_GREEN "PASSED" COLOR_RESET "\n"); \
+    if (!current_test_failed) { \
+        tests_passed++; \
+        printf(COLOR_GREEN "PASSED" COLOR_RESET "\n"); \
+    } \
 } while(0)
 
 #define ASSERT(cond, msg) do { \
     if (!(cond)) { \
         printf(COLOR_RED "FAILED" COLOR_RESET "\n    Assertion failed: %s\n    at %s:%d\n    %s\n", \
                #cond, __FILE__, __LINE__, #msg); \
+        current_test_failed = 1; \
         return; \
     } \
 } while(0)
@@ -39,12 +44,13 @@ static int tests_passed = 0;
     if ((a) != (b)) { \
         printf(COLOR_RED "FAILED" COLOR_RESET "\n    Expected %d == %d\n    at %s:%d\n", \
                (int)(a), (int)(b), __FILE__, __LINE__); \
+        current_test_failed = 1; \
         return; \
     } \
 } while(0)
 
-// Test map
-static const char* TEST_MAP =
+// Test maps
+static const char* TEST_MAP_ASCII =
     "x # # # # # x\n"
     "x . . . . * x\n"
     "x 1 . . . . x\n"
@@ -53,14 +59,20 @@ static const char* TEST_MAP =
     "x * . . . . x\n"
     "x # # # # # x\n";
 
+static const char* TEST_MAP_UTF8 =
+    "× ■ ■ ■ ■ ■ × \n"
+    "× □ □ □ □ ◆ × \n"
+    "× ▷ □ □ □ □ × \n"
+    "× □ □ □ □ □ × \n"
+    "× □ □ □ □ ◁ × \n"
+    "× ◆ □ □ □ □ × \n"
+    "× ■ ■ ■ ■ ■ × \n";
+
 // =============================================================================
 // Arena Tests
 // =============================================================================
 
-TEST(test_arena_load) {
-    Arena arena;
-    bool result = arena_load_from_string(&arena, TEST_MAP);
-    ASSERT(result, "Failed to load arena from string");
+void test_arena_load(Arena arena) {
     ASSERT_EQ(arena.width, 7);
     ASSERT_EQ(arena.height, 7);
 
@@ -95,9 +107,23 @@ TEST(test_arena_load) {
     ASSERT_EQ(arena.num_crystals, 2);
 }
 
+TEST(test_arena_load_ascii) {
+    Arena arena;
+    bool result = arena_load_from_string(&arena, TEST_MAP_ASCII);
+    ASSERT(result, "Failed to load arena from ascii string");
+    test_arena_load(arena);
+}
+
+TEST(test_arena_load_utf8) {
+    Arena arena;
+    bool result = arena_load_from_string(&arena, TEST_MAP_UTF8);
+    ASSERT(result, "Failed to load arena from utf8 string");
+    test_arena_load(arena);
+}
+
 TEST(test_arena_passable) {
     Arena arena;
-    arena_load_from_string(&arena, TEST_MAP);
+    arena_load_from_string(&arena, TEST_MAP_ASCII);
 
     ASSERT(arena_is_passable(&arena, 2, 2), "Floor");
     ASSERT(!arena_is_passable(&arena, 0, 0), "Void");
@@ -106,7 +132,7 @@ TEST(test_arena_passable) {
 
 TEST(test_arena_crystal) {
     Arena arena;
-    arena_load_from_string(&arena, TEST_MAP);
+    arena_load_from_string(&arena, TEST_MAP_ASCII);
 
     int crystal_idx = arena_get_crystal_at(&arena, 5, 1);
     ASSERT(crystal_idx >= 0, "Crystal should exist at position");
@@ -131,7 +157,7 @@ TEST(test_player_init) {
     Position spawn = {5, 5};
     player_init(&player, spawn);
 
-    ASSERT_EQ(player.pos.x, 6);
+    ASSERT_EQ(player.pos.x, 5);
     ASSERT_EQ(player.pos.y, 5);
     ASSERT_EQ(player.health, STARTING_HEALTH);
     ASSERT_EQ(player.energy, STARTING_ENERGY);
@@ -193,7 +219,7 @@ TEST(test_player_energy) {
 
 TEST(test_combat_fire_laser_hit) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
 
     // Player 0 at (1, 2), Player 1 at (5, 4)
     // Move player 1 to be in line with player 0
@@ -211,7 +237,7 @@ TEST(test_combat_fire_laser_hit) {
 
 TEST(test_combat_fire_laser_blocked_by_wall) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
 
     // Fire up from player 0 (at 1, 2) - should hit wall at (1, 0)
     LaserResult result = combat_fire_laser(&state, 0, DIR_UP);
@@ -221,7 +247,7 @@ TEST(test_combat_fire_laser_blocked_by_wall) {
 
 TEST(test_combat_pushback) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
 
     // Place player 1 at (3, 3)
     state.players[1].pos.x = 3;
@@ -237,7 +263,7 @@ TEST(test_combat_pushback) {
 
 TEST(test_combat_pushback_into_wall) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
 
     // Place player 1 at (1, 1) - wall is at x=0
     // But x=0 is void in our map, and x=1, y=0 is wall
@@ -258,7 +284,7 @@ TEST(test_combat_pushback_into_wall) {
 
 TEST(test_game_init) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
 
     ASSERT_EQ(state.current_tick, 0);
     ASSERT_EQ(state.winner, -1);
@@ -273,7 +299,7 @@ TEST(test_game_init) {
 
 TEST(test_game_step_movement) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
 
     // Player 0 moves right
     PlayerAction actions[2] = {
@@ -289,7 +315,7 @@ TEST(test_game_step_movement) {
 
 TEST(test_game_step_shooting) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
 
     // Place players in line
     state.players[0].pos.x = 2;
@@ -312,7 +338,7 @@ TEST(test_game_step_shooting) {
 
 TEST(test_game_simultaneous_shoot) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
 
     // Place players facing each other
     state.players[0].pos.x = 2;
@@ -337,7 +363,7 @@ TEST(test_game_simultaneous_shoot) {
 
 TEST(test_game_movement_collision) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
 
     // Place players adjacent
     state.players[0].pos.x = 2;
@@ -360,7 +386,7 @@ TEST(test_game_movement_collision) {
 
 TEST(test_game_crystal_collection) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
 
     // Use some energy first
     state.players[0].energy = 3;
@@ -386,7 +412,7 @@ TEST(test_game_crystal_collection) {
 
 TEST(test_game_frag_and_respawn) {
     GameState state;
-    game_init(&state, TEST_MAP);
+    game_init(&state, TEST_MAP_ASCII);
     api_game_set_seed(42);  // For reproducible respawn
 
     // Place players
@@ -416,7 +442,7 @@ TEST(test_game_frag_and_respawn) {
 
 TEST(test_api_basic) {
     GameState state;
-    api_game_init(&state, TEST_MAP);
+    api_game_init(&state, TEST_MAP_ASCII);
 
     ASSERT_EQ(api_get_arena_width(&state), 7);
     ASSERT_EQ(api_get_arena_height(&state), 7);
@@ -427,7 +453,7 @@ TEST(test_api_basic) {
 
 TEST(test_api_step) {
     GameState state;
-    api_game_init(&state, TEST_MAP);
+    api_game_init(&state, TEST_MAP_ASCII);
 
     // Player 0 moves right, player 1 does nothing
     int actions[4] = {ACTION_RIGHT, ACTION_NOOP, ACTION_NOOP, ACTION_NOOP};
@@ -447,7 +473,8 @@ int main(void) {
     printf("================================\n\n");
 
     printf(COLOR_CYAN "Arena Tests:" COLOR_RESET "\n");
-    RUN_TEST(test_arena_load);
+    RUN_TEST(test_arena_load_ascii);
+    RUN_TEST(test_arena_load_utf8);
     RUN_TEST(test_arena_passable);
     RUN_TEST(test_arena_crystal);
     printf("\n");
