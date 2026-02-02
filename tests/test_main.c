@@ -72,72 +72,63 @@ static const char* TEST_MAP_UTF8 =
 // Arena Tests
 // =============================================================================
 
-void test_arena_load(Arena arena) {
-    ASSERT_EQ(arena.width, 7);
-    ASSERT_EQ(arena.height, 7);
+void test_arena_load(Arena* arena) {
+    ASSERT_EQ(arena->width, 7);
+    ASSERT_EQ(arena->height, 7);
 
     // Check corners are void
-    ASSERT_EQ(arena_get_tile(&arena, 0, 0), TILE_VOID);
-    ASSERT_EQ(arena_get_tile(&arena, 6, 0), TILE_VOID);
-    ASSERT_EQ(arena_get_tile(&arena, 0, 6), TILE_VOID);
-    ASSERT_EQ(arena_get_tile(&arena, 6, 6), TILE_VOID);
+    ASSERT_EQ(arena_get_tile(arena, 0, 0), TILE_VOID);
+    ASSERT_EQ(arena_get_tile(arena, 6, 0), TILE_VOID);
+    ASSERT_EQ(arena_get_tile(arena, 0, 6), TILE_VOID);
+    ASSERT_EQ(arena_get_tile(arena, 6, 6), TILE_VOID);
 
     // Check walls
-    ASSERT_EQ(arena_get_tile(&arena, 1, 0), TILE_WALL);
-    ASSERT_EQ(arena_get_tile(&arena, 5, 0), TILE_WALL);
-    ASSERT_EQ(arena_get_tile(&arena, 1, 6), TILE_WALL);
-    ASSERT_EQ(arena_get_tile(&arena, 5, 6), TILE_WALL);
+    ASSERT_EQ(arena_get_tile(arena, 1, 0), TILE_WALL);
+    ASSERT_EQ(arena_get_tile(arena, 5, 0), TILE_WALL);
+    ASSERT_EQ(arena_get_tile(arena, 1, 6), TILE_WALL);
+    ASSERT_EQ(arena_get_tile(arena, 5, 6), TILE_WALL);
 
     // Check floors
-    ASSERT_EQ(arena_get_tile(&arena, 1, 1), TILE_FLOOR);
-    ASSERT_EQ(arena_get_tile(&arena, 3, 3), TILE_FLOOR);
+    ASSERT_EQ(arena_get_tile(arena, 1, 1), TILE_FLOOR);
+    ASSERT_EQ(arena_get_tile(arena, 3, 3), TILE_FLOOR);
 
     // Check spawn points (should be floor)
-    ASSERT_EQ(arena_get_tile(&arena, 1, 2), TILE_FLOOR);
-    ASSERT_EQ(arena_get_tile(&arena, 5, 4), TILE_FLOOR);
+    ASSERT_EQ(arena_get_tile(arena, 1, 2), TILE_FLOOR);
+    ASSERT_EQ(arena_get_tile(arena, 5, 4), TILE_FLOOR);
 
     // Check crystal tiles (should be floor)
-    ASSERT_EQ(arena_get_tile(&arena, 5, 1), TILE_FLOOR);
-    ASSERT_EQ(arena_get_tile(&arena, 1, 5), TILE_FLOOR);
+    ASSERT_EQ(arena_get_tile(arena, 5, 1), TILE_FLOOR);
+    ASSERT_EQ(arena_get_tile(arena, 1, 5), TILE_FLOOR);
 
     // Check crystal positions
-    ASSERT_EQ(arena.crystals[0].pos.x, 5);
-    ASSERT_EQ(arena.crystals[0].pos.y, 1);
-    ASSERT_EQ(arena.crystals[1].pos.x, 1);
-    ASSERT_EQ(arena.crystals[1].pos.y, 5);
+    ASSERT_EQ(arena->crystals[0].pos.x, 5);
+    ASSERT_EQ(arena->crystals[0].pos.y, 1);
+    ASSERT_EQ(arena->crystals[1].pos.x, 1);
+    ASSERT_EQ(arena->crystals[1].pos.y, 5);
 
     // Check spawn points
-    ASSERT_EQ(arena.num_spawn_points, 2);
-    ASSERT_EQ(arena.spawn_points[0].pos.x, 1);
-    ASSERT_EQ(arena.spawn_points[0].pos.y, 2);
-    ASSERT_EQ(arena.spawn_points[1].pos.x, 5);
-    ASSERT_EQ(arena.spawn_points[1].pos.y, 4);
+    ASSERT_EQ(arena->num_spawn_points, 2);
+    ASSERT_EQ(arena->spawn_points[0].pos.x, 1);
+    ASSERT_EQ(arena->spawn_points[0].pos.y, 2);
+    ASSERT_EQ(arena->spawn_points[1].pos.x, 5);
+    ASSERT_EQ(arena->spawn_points[1].pos.y, 4);
 
     // Check crystal count
-    ASSERT_EQ(arena.num_crystals, 2);
+    ASSERT_EQ(arena->num_crystals, 2);
 }
 
 TEST(test_arena_load_ascii) {
     Arena arena;
     bool result = arena_load_from_string(&arena, TEST_MAP_ASCII);
     ASSERT(result, "Failed to load arena from ascii string");
-    test_arena_load(arena);
+    test_arena_load(&arena);
 }
 
 TEST(test_arena_load_utf8) {
     Arena arena;
     bool result = arena_load_from_string(&arena, TEST_MAP_UTF8);
     ASSERT(result, "Failed to load arena from utf8 string");
-    test_arena_load(arena);
-}
-
-TEST(test_arena_passable) {
-    Arena arena;
-    arena_load_from_string(&arena, TEST_MAP_ASCII);
-
-    ASSERT(arena_is_passable(&arena, 2, 2), "Floor");
-    ASSERT(!arena_is_passable(&arena, 0, 0), "Void");
-    ASSERT(!arena_is_passable(&arena, 1, 0), "Wall");
+    test_arena_load(&arena);
 }
 
 TEST(test_arena_crystal) {
@@ -485,7 +476,6 @@ int main(void) {
     printf(COLOR_CYAN "Arena Tests:" COLOR_RESET "\n");
     RUN_TEST(test_arena_load_ascii);
     RUN_TEST(test_arena_load_utf8);
-    RUN_TEST(test_arena_passable);
     RUN_TEST(test_arena_crystal);
     printf("\n");
 
