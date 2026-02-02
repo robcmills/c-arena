@@ -225,7 +225,7 @@ TEST(test_combat_fire_laser_hit) {
     // Fire right from player 1
     LaserResult result = combat_fire_laser(&state, 0, DIR_RIGHT);
 
-    ASSERT(result.hit, "Laser should hit player in line of fire");
+    ASSERT_EQ(result.hit_type, LASER_HIT_PLAYER);
     ASSERT_EQ(result.target_player, 1);
     ASSERT_EQ(result.hit_position.x, 3);
     ASSERT_EQ(result.hit_position.y, 0);
@@ -238,7 +238,7 @@ TEST(test_combat_fire_laser_blocked_by_wall) {
     GameState state;
     game_init(&state, "1 # 2");
     LaserResult result = combat_fire_laser(&state, 0, DIR_RIGHT);
-    ASSERT(!result.hit, "Laser should not hit player when blocked by wall");
+    ASSERT_EQ(result.hit_type, LASER_HIT_WALL);
     ASSERT_EQ(result.hit_position.x, 1);
     ASSERT_EQ(result.hit_position.y, 0);
 }

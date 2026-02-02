@@ -32,7 +32,7 @@ LaserResult combat_fire_laser(
     Direction dir
 ) {
     LaserResult result = {
-        .hit = false,
+        .hit_type = LASER_HIT_NONE,
         .target_player = -1,
         .hit_position = state->players[shooter_idx].pos,
         .pushback_to = {-1, -1},
@@ -54,12 +54,14 @@ LaserResult combat_fire_laser(
 
         // Check bounds
         if (!arena_is_valid_position(&state->arena, current.x, current.y)) {
+            result.hit_type = LASER_HIT_EDGE;
             result.hit_position = current;
             break;
         }
 
         // Check for wall
         if (arena_is_wall(&state->arena, current.x, current.y)) {
+            result.hit_type = LASER_HIT_WALL;
             result.hit_position = current;
             break;
         }
@@ -70,7 +72,7 @@ LaserResult combat_fire_laser(
                 state->players[i].alive &&
                 state->players[i].pos.x == current.x &&
                 state->players[i].pos.y == current.y) {
-                result.hit = true;
+                result.hit_type = LASER_HIT_PLAYER;
                 result.target_player = i;
                 result.hit_position = current;
 
@@ -100,7 +102,7 @@ void combat_apply_laser_result(
 ) {
     (void)shooter_idx;  // Unused, but kept for potential future use
 
-    if (!result->hit || result->target_player < 0) {
+    if (result->hit_type != LASER_HIT_PLAYER || result->target_player < 0) {
         return;
     }
 

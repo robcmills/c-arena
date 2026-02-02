@@ -72,6 +72,13 @@ typedef enum {
     ACTION_RIGHT = 4
 } ActionType;
 
+typedef enum {
+    LASER_HIT_NONE   = 0,  // No shot fired (DIR_NONE)
+    LASER_HIT_PLAYER = 1,  // Hit another player
+    LASER_HIT_WALL   = 2,  // Hit a wall
+    LASER_HIT_EDGE   = 3   // Hit the arena edge (out of bounds)
+} LaserHitType;
+
 // =============================================================================
 // Structures
 // =============================================================================
@@ -130,8 +137,8 @@ typedef struct {
 
 // Result of a laser shot (for debugging/rendering)
 typedef struct {
-    bool hit;
-    int target_player;      // -1 if no hit
+    LaserHitType hit_type;  // What the laser hit
+    int target_player;      // -1 if no player hit
     Position hit_position;  // where the laser stopped
     Position pushback_to;   // where target was pushed to
     bool target_fragged;    // true if pushback caused frag

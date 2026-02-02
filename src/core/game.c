@@ -157,7 +157,7 @@ void game_phase_shooting(GameState* state, const PlayerAction actions[MAX_PLAYER
     // Apply all hits simultaneously
     // This means if both players shoot each other, both take damage
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (will_shoot[i] && results[i].hit) {
+        if (will_shoot[i] && results[i].hit_type == LASER_HIT_PLAYER) {
             int target = results[i].target_player;
 
             // Apply damage
@@ -170,7 +170,7 @@ void game_phase_shooting(GameState* state, const PlayerAction actions[MAX_PLAYER
 
     // Apply pushback after all damage (so simultaneous shots don't interfere)
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (will_shoot[i] && results[i].hit) {
+        if (will_shoot[i] && results[i].hit_type == LASER_HIT_PLAYER) {
             int target = results[i].target_player;
 
             // Only apply pushback if target is still alive
