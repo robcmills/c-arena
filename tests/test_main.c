@@ -79,10 +79,14 @@ void test_arena_load(Arena arena) {
     // Check corners are void
     ASSERT_EQ(arena_get_tile(&arena, 0, 0), TILE_VOID);
     ASSERT_EQ(arena_get_tile(&arena, 6, 0), TILE_VOID);
+    ASSERT_EQ(arena_get_tile(&arena, 0, 6), TILE_VOID);
+    ASSERT_EQ(arena_get_tile(&arena, 6, 6), TILE_VOID);
 
     // Check walls
     ASSERT_EQ(arena_get_tile(&arena, 1, 0), TILE_WALL);
     ASSERT_EQ(arena_get_tile(&arena, 5, 0), TILE_WALL);
+    ASSERT_EQ(arena_get_tile(&arena, 1, 6), TILE_WALL);
+    ASSERT_EQ(arena_get_tile(&arena, 5, 6), TILE_WALL);
 
     // Check floors
     ASSERT_EQ(arena_get_tile(&arena, 1, 1), TILE_FLOOR);
@@ -92,11 +96,17 @@ void test_arena_load(Arena arena) {
     ASSERT_EQ(arena_get_tile(&arena, 1, 2), TILE_FLOOR);
     ASSERT_EQ(arena_get_tile(&arena, 5, 4), TILE_FLOOR);
 
-    // Check crystal positions (should be floor)
+    // Check crystal tiles (should be floor)
     ASSERT_EQ(arena_get_tile(&arena, 5, 1), TILE_FLOOR);
     ASSERT_EQ(arena_get_tile(&arena, 1, 5), TILE_FLOOR);
 
-    // Check spawn point count
+    // Check crystal positions
+    ASSERT_EQ(arena.crystals[0].pos.x, 5);
+    ASSERT_EQ(arena.crystals[0].pos.y, 1);
+    ASSERT_EQ(arena.crystals[1].pos.x, 1);
+    ASSERT_EQ(arena.crystals[1].pos.y, 5);
+
+    // Check spawn points
     ASSERT_EQ(arena.num_spawn_points, 2);
     ASSERT_EQ(arena.spawn_points[0].pos.x, 1);
     ASSERT_EQ(arena.spawn_points[0].pos.y, 2);
