@@ -28,12 +28,14 @@ void arena_init(Arena* arena, int width, int height) {
 
 bool arena_load_from_string(Arena* arena, const char* map_str) {
     // First pass: determine dimensions
+    // Must properly count UTF-8 characters, not bytes
     int width = 0;
     int height = 0;
     int current_width = 0;
 
     for (const char* p = map_str; *p; p++) {
-        if (*p == '\n') {
+        unsigned char c = (unsigned char)*p;
+        if (c == '\n') {
             if (current_width > width) {
                 width = current_width;
             }
@@ -41,7 +43,15 @@ bool arena_load_from_string(Arena* arena, const char* map_str) {
                 height++;
             }
             current_width = 0;
-        } else if (*p != ' ') {
+        } else if (c == ' ') {
+            // Skip spaces (used for formatting)
+            continue;
+        } else if ((c & 0xC0) == 0x80) {
+            // UTF-8 continuation byte (10xxxxxx) - skip, don't count
+            continue;
+        } else {
+            // Either ASCII (0xxxxxxx) or start of multi-byte sequence
+            // (110xxxxx, 1110xxxx, 11110xxx) - count as one character
             current_width++;
         }
     }
