@@ -173,10 +173,10 @@ TEST(test_player_damage) {
     player_init(&player, spawn);
 
     player_take_damage(&player, 1);
-    ASSERT_EQ(player.health, 3);
+    ASSERT_EQ(player.health, STARTING_HEALTH - 1);
     ASSERT(player.alive, "Player should be alive with health remaining");
 
-    player_take_damage(&player, 3);
+    player_take_damage(&player, STARTING_HEALTH - 1);
     ASSERT_EQ(player.health, 0);
     ASSERT(!player.alive, "Player should be dead at zero health");
 }
@@ -202,12 +202,12 @@ TEST(test_player_energy) {
     Position spawn = {0, 0};
     player_init(&player, spawn);
 
-    ASSERT_EQ(player.energy, 8);
+    ASSERT_EQ(player.energy, STARTING_ENERGY);
     ASSERT(player_use_energy(&player, 1), "Should successfully use energy");
-    ASSERT_EQ(player.energy, 7);
+    ASSERT_EQ(player.energy, STARTING_ENERGY - 1);
 
     // Use all energy
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < STARTING_ENERGY - 1; i++) {
         player_use_energy(&player, 1);
     }
     ASSERT_EQ(player.energy, 0);
@@ -306,9 +306,9 @@ TEST(test_game_init) {
 
 TEST(test_game_step_movement) {
     GameState state;
-    game_init(&state, TEST_MAP_ASCII);
+    game_init(&state, "1 . 2");
 
-    // Player 0 moves right
+    // Player 1 moves right
     PlayerAction actions[2] = {
         {ACTION_RIGHT, ACTION_NOOP},
         {ACTION_NOOP, ACTION_NOOP}
@@ -316,42 +316,42 @@ TEST(test_game_step_movement) {
 
     game_step(&state, actions);
 
-    ASSERT_EQ(state.players[0].pos.x, 2);
-    ASSERT_EQ(state.players[0].pos.y, 2);
+    // Player 1 moved right
+    ASSERT_EQ(state.players[0].pos.x, 1);
+    ASSERT_EQ(state.players[0].pos.y, 0);
+    // Player 2 stayed put
+    ASSERT_EQ(state.players[1].pos.x, 2);
+    ASSERT_EQ(state.players[1].pos.y, 0);
 }
 
 TEST(test_game_step_shooting) {
     GameState state;
-    game_init(&state, TEST_MAP_ASCII);
+    game_init(&state, "1 . 2 .");
 
-    // Place players in line
-    state.players[0].pos.x = 2;
-    state.players[0].pos.y = 3;
-    state.players[1].pos.x = 4;
-    state.players[1].pos.y = 3;
-
-    // Player 0 shoots right
     PlayerAction actions[2] = {
-        {ACTION_NOOP, ACTION_RIGHT},
+        {ACTION_NOOP, ACTION_RIGHT}, // Player 1 shoots right
         {ACTION_NOOP, ACTION_NOOP}
     };
 
     StepInfo info = game_step(&state, actions);
 
-    ASSERT(info.player_hit[1], "Player 1 should be hit by laser");
-    ASSERT_EQ(state.players[1].health, 3);
-    ASSERT_EQ(state.players[1].pos.x, 5);  // Pushed right
+    ASSERT(!info.player_fragged[0], "Player 1 should not be fragged");
+    ASSERT(!info.player_fragged[1], "Player 2 should not be fragged");
+    ASSERT(!info.crystal_collected[0], "Player 1 should not have collected crystal");
+    ASSERT(!info.crystal_collected[1], "Player 2 should not have collected crystal");
+    ASSERT_EQ(info.damage_dealt[0], 1);
+    ASSERT_EQ(info.damage_dealt[1], 0);
+    ASSERT_EQ(info.damage_taken[0], 0);
+    ASSERT_EQ(info.damage_taken[1], 1);
+    ASSERT(!info.player_hit[0], "Player 1 should not be hit by laser");
+    ASSERT(info.player_hit[1], "Player 2 should be hit by laser");
+    ASSERT_EQ(state.players[1].health, STARTING_HEALTH - 1);
+    ASSERT_EQ(state.players[1].pos.x, 3);  // Pushed right
 }
 
 TEST(test_game_simultaneous_shoot) {
     GameState state;
-    game_init(&state, TEST_MAP_ASCII);
-
-    // Place players facing each other
-    state.players[0].pos.x = 2;
-    state.players[0].pos.y = 3;
-    state.players[1].pos.x = 4;
-    state.players[1].pos.y = 3;
+    game_init(&state, ". 1 . 2 .");
 
     // Both shoot at each other
     PlayerAction actions[2] = {
@@ -361,24 +361,47 @@ TEST(test_game_simultaneous_shoot) {
 
     StepInfo info = game_step(&state, actions);
 
-    // Both should be hit
+    ASSERT_EQ(info.damage_dealt[0], 1);
+    ASSERT_EQ(info.damage_dealt[1], 1);
+    ASSERT_EQ(info.damage_taken[0], 1);
+    ASSERT_EQ(info.damage_taken[1], 1);
     ASSERT(info.player_hit[0], "Player 0 should be hit in simultaneous shoot");
     ASSERT(info.player_hit[1], "Player 1 should be hit in simultaneous shoot");
-    ASSERT_EQ(state.players[0].health, 3);
-    ASSERT_EQ(state.players[1].health, 3);
+    ASSERT_EQ(state.players[0].pos.x, 0);
+    ASSERT_EQ(state.players[1].pos.x, 4);
+    ASSERT_EQ(state.players[0].health, STARTING_HEALTH - 1);
+    ASSERT_EQ(state.players[1].health, STARTING_HEALTH - 1);
+}
+
+TEST(test_game_simultaneous_shoot_and_move) {
+    GameState state;
+    game_init(&state, ". 1 . . 2 .");
+
+    // Both shoot and move towards each other
+    PlayerAction actions[2] = {
+        {ACTION_RIGHT, ACTION_RIGHT},
+        {ACTION_LEFT, ACTION_LEFT}
+    };
+
+    StepInfo info = game_step(&state, actions);
+
+    ASSERT_EQ(info.damage_dealt[0], 1);
+    ASSERT_EQ(info.damage_dealt[1], 1);
+    ASSERT_EQ(info.damage_taken[0], 1);
+    ASSERT_EQ(info.damage_taken[1], 1);
+    ASSERT(info.player_hit[0], "Player 0 should be hit in simultaneous shoot");
+    ASSERT(info.player_hit[1], "Player 1 should be hit in simultaneous shoot");
+    ASSERT_EQ(state.players[0].pos.x, 1); // Movement canceled, no pushback
+    ASSERT_EQ(state.players[1].pos.x, 4);
+    ASSERT_EQ(state.players[0].health, STARTING_HEALTH - 1);
+    ASSERT_EQ(state.players[1].health, STARTING_HEALTH - 1);
 }
 
 TEST(test_game_movement_collision) {
     GameState state;
-    game_init(&state, TEST_MAP_ASCII);
+    game_init(&state, "1 . 2");
 
-    // Place players adjacent
-    state.players[0].pos.x = 2;
-    state.players[0].pos.y = 3;
-    state.players[1].pos.x = 4;
-    state.players[1].pos.y = 3;
-
-    // Both try to move to (3, 3)
+    // Both try to move to (1, 0)
     PlayerAction actions[2] = {
         {ACTION_RIGHT, ACTION_NOOP},
         {ACTION_LEFT, ACTION_NOOP}
@@ -387,49 +410,43 @@ TEST(test_game_movement_collision) {
     game_step(&state, actions);
 
     // Both should stay in place
-    ASSERT_EQ(state.players[0].pos.x, 2);
-    ASSERT_EQ(state.players[1].pos.x, 4);
+    ASSERT_EQ(state.players[0].pos.x, 0);
+    ASSERT_EQ(state.players[1].pos.x, 2);
 }
 
 TEST(test_game_crystal_collection) {
     GameState state;
-    game_init(&state, TEST_MAP_ASCII);
+    game_init(&state, "1 * * 2");
 
     // Use some energy first
     state.players[0].energy = 3;
-
-    // Move player 0 to crystal position (1, 5)
-    state.players[0].pos.x = 1;
-    state.players[0].pos.y = 4;
+    state.players[1].energy = 3;
 
     PlayerAction actions[2] = {
-        {ACTION_DOWN, ACTION_NOOP},
-        {ACTION_NOOP, ACTION_NOOP}
+        {ACTION_RIGHT, ACTION_NOOP},
+        {ACTION_LEFT, ACTION_NOOP}
     };
 
     StepInfo info = game_step(&state, actions);
 
-    ASSERT(info.crystal_collected[0], "Player 0 should have collected crystal");
+    ASSERT(info.crystal_collected[0], "Player 1 should have collected crystal");
+    ASSERT(info.crystal_collected[1], "Player 2 should have collected crystal");
     ASSERT_EQ(state.players[0].energy, MAX_ENERGY);
+    ASSERT_EQ(state.players[1].energy, MAX_ENERGY);
 
     // Crystal should be on cooldown now
-    int crystal_idx = arena_get_crystal_at(&state.arena, 1, 5);
+    int crystal_idx = arena_get_crystal_at(&state.arena, 1, 0);
     ASSERT(!arena_crystal_available(&state.arena, crystal_idx), "Crystal should be on cooldown after collection");
 }
 
 TEST(test_game_frag_and_respawn) {
     GameState state;
-    game_init(&state, TEST_MAP_ASCII);
+    game_init(&state, "1 . . . . . . 2");
     api_game_set_seed(42);  // For reproducible respawn
 
-    // Place players
-    state.players[0].pos.x = 2;
-    state.players[0].pos.y = 3;
-    state.players[1].pos.x = 4;
-    state.players[1].pos.y = 3;
     state.players[1].health = 1;
 
-    // Player 0 shoots player 1 who has 1 health
+    // Player 1 shoots player 2 who has 1 health
     PlayerAction actions[2] = {
         {ACTION_NOOP, ACTION_RIGHT},
         {ACTION_NOOP, ACTION_NOOP}
@@ -441,6 +458,7 @@ TEST(test_game_frag_and_respawn) {
     ASSERT_EQ(state.players[0].score, 1);
     ASSERT(state.players[1].alive, "Player 1 should have respawned");
     ASSERT_EQ(state.players[1].health, MAX_HEALTH);
+    ASSERT_EQ(state.players[1].pos.x, 4); // deterministic based on seed
 }
 
 // =============================================================================
@@ -505,6 +523,7 @@ int main(void) {
     RUN_TEST(test_game_step_movement);
     RUN_TEST(test_game_step_shooting);
     RUN_TEST(test_game_simultaneous_shoot);
+    RUN_TEST(test_game_simultaneous_shoot_and_move);
     RUN_TEST(test_game_movement_collision);
     RUN_TEST(test_game_crystal_collection);
     RUN_TEST(test_game_frag_and_respawn);

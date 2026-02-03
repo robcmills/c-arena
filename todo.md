@@ -1,0 +1,1 @@
+- [ ] Enable variable number of players (1 to 8)
