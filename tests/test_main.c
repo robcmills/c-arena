@@ -241,39 +241,48 @@ TEST(test_combat_fire_laser_blocked_by_wall) {
     ASSERT_EQ(result.hit_type, LASER_HIT_WALL);
     ASSERT_EQ(result.hit_position.x, 1);
     ASSERT_EQ(result.hit_position.y, 0);
+    ASSERT_EQ(result.target_player, -1);
+    ASSERT_EQ(result.pushback_to.x, -1);
+    ASSERT_EQ(result.pushback_to.y, -1);
+    ASSERT(!result.target_fragged, "Player should not be fragged");
 }
 
 TEST(test_combat_pushback) {
     GameState state;
-    game_init(&state, TEST_MAP_ASCII);
-
-    // Place player 1 at (3, 3)
-    state.players[1].pos.x = 3;
-    state.players[1].pos.y = 3;
+    game_init(&state, "1 .");
 
     bool fragged = false;
     Position new_pos = combat_apply_pushback(&state, 1, DIR_RIGHT, 1, &fragged);
 
     ASSERT(!fragged, "Player should not be fragged by pushback into open space");
-    ASSERT_EQ(new_pos.x, 4);
-    ASSERT_EQ(new_pos.y, 3);
+    ASSERT_EQ(new_pos.x, 1);
+    ASSERT_EQ(new_pos.y, 0);
 }
 
 TEST(test_combat_pushback_into_wall) {
     GameState state;
-    game_init(&state, TEST_MAP_ASCII);
-
-    // Place player 1 at (1, 1) - wall is at x=0
-    // But x=0 is void in our map, and x=1, y=0 is wall
-    // Let's use (5, 1) and push right toward void at (6, 1)
-    state.players[1].pos.x = 5;
-    state.players[1].pos.y = 1;
+    game_init(&state, "1 #");
 
     bool fragged = false;
-    combat_apply_pushback(&state, 1, DIR_RIGHT, 1, &fragged);
+    Position new_pos = combat_apply_pushback(&state, 1, DIR_RIGHT, 1, &fragged);
 
-    // Should be pushed into void
+    ASSERT(!fragged, "Player should not be fragged when pushed into wall");
+    // position should be unchanged
+    ASSERT_EQ(new_pos.x, 0);
+    ASSERT_EQ(new_pos.y, 0);
+}
+
+TEST(test_combat_pushback_into_void) {
+    GameState state;
+    game_init(&state, "1 x");
+
+    bool fragged = false;
+    Position new_pos = combat_apply_pushback(&state, 1, DIR_RIGHT, 1, &fragged);
+
     ASSERT(fragged, "Player should be fragged when pushed into void");
+    // position should be void tile
+    ASSERT_EQ(new_pos.x, 1);
+    ASSERT_EQ(new_pos.y, 0);
 }
 
 // =============================================================================
@@ -488,6 +497,7 @@ int main(void) {
     RUN_TEST(test_combat_fire_laser_blocked_by_wall);
     RUN_TEST(test_combat_pushback);
     RUN_TEST(test_combat_pushback_into_wall);
+    RUN_TEST(test_combat_pushback_into_void);
     printf("\n");
 
     printf(COLOR_CYAN "Game Tests:" COLOR_RESET "\n");
