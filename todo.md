@@ -1,1 +1,3 @@
+- [ ] Phase 2: Render
+- [ ] Phase 3: Input
 - [ ] Enable variable number of players (1 to 8)
