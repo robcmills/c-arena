@@ -1,0 +1,4 @@
+CompileFlags:
+  Add:
+    - "-I/opt/homebrew/include/SDL2"
+    - "-D_THREAD_SAFE"
