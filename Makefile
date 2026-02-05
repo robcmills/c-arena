@@ -19,7 +19,7 @@ SRCS = $(SRC_DIR)/arena.c \
 OBJS = $(SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
 # Render source files
-RENDER_SRCS = $(RENDER_DIR)/render.c
+RENDER_SRCS = $(RENDER_DIR)/render.c $(RENDER_DIR)/screenshot.c
 RENDER_OBJS = $(RENDER_SRCS:$(RENDER_DIR)/%.c=$(BUILD_DIR)/%.o)
 
 # Library name
@@ -28,12 +28,12 @@ ifeq ($(UNAME_S),Darwin)
     LIB_EXT = dylib
     LIB_FLAGS = -dynamiclib
     SDL_CFLAGS = $(shell sdl2-config --cflags 2>/dev/null || echo "-I/opt/homebrew/include/SDL2 -I/usr/local/include/SDL2")
-    SDL_LDFLAGS = $(shell sdl2-config --libs 2>/dev/null || echo "-L/opt/homebrew/lib -L/usr/local/lib -lSDL2")
+    SDL_LDFLAGS = $(shell sdl2-config --libs 2>/dev/null || echo "-L/opt/homebrew/lib -L/usr/local/lib -lSDL2") -lSDL2_image
 else
     LIB_EXT = so
     LIB_FLAGS = -shared
     SDL_CFLAGS = $(shell sdl2-config --cflags)
-    SDL_LDFLAGS = $(shell sdl2-config --libs)
+    SDL_LDFLAGS = $(shell sdl2-config --libs) -lSDL2_image
 endif
 
 LIB_NAME = libarena.$(LIB_EXT)
@@ -63,10 +63,13 @@ render: dirs $(RENDER_BIN)
 $(BUILD_DIR)/render.o: $(RENDER_DIR)/render.c
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -I$(SRC_DIR) -c $< -o $@
 
+$(BUILD_DIR)/screenshot.o: $(RENDER_DIR)/screenshot.c
+	$(CC) $(CFLAGS) $(SDL_CFLAGS) -I$(SRC_DIR) -c $< -o $@
+
 $(BUILD_DIR)/main_render.o: $(RENDER_DIR)/main.c
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -I$(SRC_DIR) -c $< -o $@
 
-$(RENDER_BIN): $(OBJS) $(BUILD_DIR)/render.o $(BUILD_DIR)/main_render.o
+$(RENDER_BIN): $(OBJS) $(BUILD_DIR)/render.o $(BUILD_DIR)/screenshot.o $(BUILD_DIR)/main_render.o
 	$(CC) $(CFLAGS) -o $@ $^ $(SDL_LDFLAGS)
 
 # Test runner

@@ -4,6 +4,7 @@
 #include "../core/types.h"
 #include "../core/game.h"
 #include "render.h"
+#include "screenshot.h"
 
 // Simple test map
 static const char* TEST_MAP =
@@ -52,6 +53,9 @@ int main(int argc, char* argv[]) {
                 }
                 if (event.key.keysym.sym == SDLK_q) {
                     running = false;
+                }
+                if (event.key.keysym.sym == SDLK_t) {
+                    screenshot_save(&ctx);
                 }
             }
         }
