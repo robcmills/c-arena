@@ -75,8 +75,8 @@ void render_arena(RenderContext* ctx, const Arena* arena) {
             SDL_Rect tile_rect = {
                 x * TILE_SIZE,
                 y * TILE_SIZE,
-                TILE_SIZE,
-                TILE_SIZE
+                TILE_SIZE - 1,
+                TILE_SIZE - 1
             };
 
             switch (arena->tiles[y][x]) {
@@ -92,12 +92,6 @@ void render_arena(RenderContext* ctx, const Arena* arena) {
             }
 
             SDL_RenderFillRect(ctx->renderer, &tile_rect);
-
-            // Draw grid lines for floor tiles
-            if (arena->tiles[y][x] == TILE_FLOOR) {
-                SDL_SetRenderDrawColor(ctx->renderer, 60, 60, 60, 255);
-                SDL_RenderDrawRect(ctx->renderer, &tile_rect);
-            }
         }
     }
 }
