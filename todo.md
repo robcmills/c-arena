@@ -2,3 +2,5 @@
 - [ ] Phase 3: Input
 - [ ] Enable variable number of players (1 to 8)
 - [ ] Remove "primitive rendering" fallback
+- [ ] Pull colors into own file and create theme
+- [ ] Refactor laser rendering (use rectangles instead of lines)

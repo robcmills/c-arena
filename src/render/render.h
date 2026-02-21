@@ -38,5 +38,6 @@ void render_arena(RenderContext* ctx, const Arena* arena);
 void render_crystals(RenderContext* ctx, const Arena* arena);
 void render_players(RenderContext* ctx, const Player players[MAX_PLAYERS]);
 void render_hud(RenderContext* ctx, const GameState* state);
+void render_lasers(RenderContext* ctx, const GameState* state);
 
 #endif // ARENA_RENDER_H

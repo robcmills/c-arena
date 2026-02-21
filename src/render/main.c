@@ -5,6 +5,10 @@
 #include "../core/game.h"
 #include "render.h"
 #include "screenshot.h"
+#include "keymap.h"
+
+// Tick rate in milliseconds (60 ticks per second)
+#define TICK_MS 16
 
 // Simple test map
 static const char* TEST_MAP =
@@ -37,9 +41,23 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Load keymap
+    Keymap keymap;
+    if (keymap_load(&keymap, "keymap.cfg") < 0) {
+        printf("No keymap.cfg found, using defaults\n");
+        keymap_load_defaults(&keymap);
+    } else {
+        printf("Loaded keymap from keymap.cfg\n");
+    }
+
+    // Enable alpha blending for laser fade
+    SDL_SetRenderDrawBlendMode(ctx.renderer, SDL_BLENDMODE_BLEND);
+
     // Main loop
     bool running = true;
+    bool paused = false;
     SDL_Event event;
+    Uint32 last_tick_time = SDL_GetTicks();
 
     while (running) {
         // Handle events
@@ -47,24 +65,40 @@ int main(int argc, char* argv[]) {
             if (event.type == SDL_QUIT) {
                 running = false;
             }
-            if (event.type == SDL_KEYDOWN) {
-                if (event.key.keysym.sym == SDLK_ESCAPE) {
+            if (event.type == SDL_KEYDOWN && !event.key.repeat) {
+                SDL_Scancode sc = event.key.keysym.scancode;
+                if (sc == keymap.bindings[KEY_QUIT]) {
                     running = false;
                 }
-                if (event.key.keysym.sym == SDLK_q) {
-                    running = false;
+                if (sc == keymap.bindings[KEY_PAUSE]) {
+                    paused = !paused;
+                    if (paused) {
+                        printf("Paused\n");
+                    } else {
+                        printf("Resumed\n");
+                        last_tick_time = SDL_GetTicks();
+                    }
                 }
-                if (event.key.keysym.sym == SDLK_t) {
+                if (sc == keymap.bindings[KEY_SCREENSHOT]) {
                     screenshot_save(&ctx);
                 }
             }
         }
 
-        // Render
+        if (!paused && !state.game_over) {
+            Uint32 now = SDL_GetTicks();
+            while (now - last_tick_time >= TICK_MS) {
+                const Uint8* kb_state = SDL_GetKeyboardState(NULL);
+                PlayerAction actions[2];
+                keymap_get_actions(&keymap, kb_state, &state, actions);
+                game_step(&state, actions);
+                last_tick_time += TICK_MS;
+            }
+        }
+
         render_game(&ctx, &state);
     }
 
-    // Cleanup
     render_cleanup(&ctx);
     printf("Goodbye!\n");
 

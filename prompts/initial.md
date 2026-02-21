@@ -1,7 +1,8 @@
 # High Level Goal
 
-Make a game and train an AI to play it.
+Make a simple game and train an AI to play it.
 The game is a 2D, multi-player, top down, tile-grid-based, arena combat game.
+Once we train the AI, then we want to enable a human to play against it.
 
 ## Architecture
 

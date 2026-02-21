@@ -42,6 +42,7 @@
 #define MAX_PLAYERS         2
 #define MAX_CRYSTALS        8
 #define MAX_SPAWN_POINTS    4
+#define MAX_LASERS          4
 
 // Respawn
 #define RESPAWN_MIN_DISTANCE 3  // Manhattan distance from opponent
@@ -127,10 +128,20 @@ typedef struct {
     ActionType shoot;
 } PlayerAction;
 
+// Visual laser beam (for rendering)
+typedef struct {
+    Position start;        // shooter position (tile coords)
+    Position end;          // where laser stopped (tile coords)
+    int player_idx;        // who fired (for color)
+    int ticks_remaining;   // countdown from LASER_COOLDOWN_TICKS
+    bool active;
+} LaserBeam;
+
 // Full game state
 typedef struct {
     Arena arena;
     Player players[MAX_PLAYERS];
+    LaserBeam lasers[MAX_LASERS];
     int current_tick;
     int winner;  // -1 = no winner yet, 0 or 1 = player index who won
     bool game_over;

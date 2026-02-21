@@ -30,6 +30,11 @@ void game_init(GameState* state, const char* map_str) {
         player_init(&state->players[i], spawn);
     }
 
+    // Clear laser beams
+    for (int i = 0; i < MAX_LASERS; i++) {
+        state->lasers[i].active = false;
+    }
+
     state->current_tick = 0;
     state->winner = -1;
     state->game_over = false;
@@ -48,6 +53,11 @@ void game_reset(GameState* state) {
             spawn = state->arena.spawn_points[i].pos;
         }
         player_init(&state->players[i], spawn);
+    }
+
+    // Clear laser beams
+    for (int i = 0; i < MAX_LASERS; i++) {
+        state->lasers[i].active = false;
     }
 
     state->current_tick = 0;
@@ -150,6 +160,22 @@ void game_phase_shooting(GameState* state, const PlayerAction actions[MAX_PLAYER
 
                 // Calculate where the shot would land
                 results[i] = combat_fire_laser(state, i, shoot_dir);
+            }
+        }
+    }
+
+    // Create visual laser beams for rendering
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (will_shoot[i]) {
+            for (int j = 0; j < MAX_LASERS; j++) {
+                if (!state->lasers[j].active) {
+                    state->lasers[j].start = state->players[i].pos;
+                    state->lasers[j].end = results[i].hit_position;
+                    state->lasers[j].player_idx = i;
+                    state->lasers[j].ticks_remaining = LASER_COOLDOWN_TICKS;
+                    state->lasers[j].active = true;
+                    break;
+                }
             }
         }
     }
@@ -417,4 +443,14 @@ void game_tick_timers(GameState* state) {
 
     // Tick crystal respawn timers
     arena_tick_crystals(&state->arena);
+
+    // Tick laser beam timers
+    for (int i = 0; i < MAX_LASERS; i++) {
+        if (state->lasers[i].active) {
+            state->lasers[i].ticks_remaining--;
+            if (state->lasers[i].ticks_remaining <= 0) {
+                state->lasers[i].active = false;
+            }
+        }
+    }
 }

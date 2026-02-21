@@ -281,6 +281,40 @@ void render_hud(RenderContext* ctx, const GameState* state) {
     }
 }
 
+void render_lasers(RenderContext* ctx, const GameState* state) {
+    for (int i = 0; i < MAX_LASERS; i++) {
+        const LaserBeam* beam = &state->lasers[i];
+        if (!beam->active) continue;
+
+        // Color based on player: P1=red, P2=blue
+        // Fade alpha based on ticks_remaining
+        Uint8 alpha = (Uint8)(255 * beam->ticks_remaining / LASER_COOLDOWN_TICKS);
+        if (beam->player_idx == 0) {
+            SDL_SetRenderDrawColor(ctx->renderer, 255, 60, 60, alpha);
+        } else {
+            SDL_SetRenderDrawColor(ctx->renderer, 60, 60, 255, alpha);
+        }
+
+        // Draw line between tile centers
+        int x1 = beam->start.x * TILE_SIZE + TILE_SIZE / 2;
+        int y1 = beam->start.y * TILE_SIZE + TILE_SIZE / 2;
+        int x2 = beam->end.x * TILE_SIZE + TILE_SIZE / 2;
+        int y2 = beam->end.y * TILE_SIZE + TILE_SIZE / 2;
+
+        // Draw a thick beam (3 parallel lines)
+        SDL_RenderDrawLine(ctx->renderer, x1, y1, x2, y2);
+        if (x1 == x2) {
+            // Vertical beam
+            SDL_RenderDrawLine(ctx->renderer, x1 - 1, y1, x2 - 1, y2);
+            SDL_RenderDrawLine(ctx->renderer, x1 + 1, y1, x2 + 1, y2);
+        } else {
+            // Horizontal beam
+            SDL_RenderDrawLine(ctx->renderer, x1, y1 - 1, x2, y2 - 1);
+            SDL_RenderDrawLine(ctx->renderer, x1, y1 + 1, x2, y2 + 1);
+        }
+    }
+}
+
 void render_game(RenderContext* ctx, const GameState* state) {
     // Clear screen
     SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
@@ -289,6 +323,7 @@ void render_game(RenderContext* ctx, const GameState* state) {
     // Render all layers
     render_arena(ctx, &state->arena);
     render_crystals(ctx, &state->arena);
+    render_lasers(ctx, state);
     render_players(ctx, state->players);
     render_hud(ctx, state);
 
