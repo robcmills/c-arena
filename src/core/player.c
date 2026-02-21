@@ -2,6 +2,7 @@
 
 void player_init(Player* player, Position spawn_pos) {
     player->pos = spawn_pos;
+    player->facing = DIR_DOWN;
     player->health = STARTING_HEALTH;
     player->energy = STARTING_ENERGY;
     player->move_cooldown_ticks = 0;
@@ -13,6 +14,7 @@ void player_init(Player* player, Position spawn_pos) {
 
 void player_respawn(Player* player, Position spawn_pos) {
     player->pos = spawn_pos;
+    player->facing = DIR_DOWN;
     player->health = STARTING_HEALTH;
     player->energy = STARTING_ENERGY;
     player->move_cooldown_ticks = 0;

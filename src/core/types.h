@@ -111,6 +111,7 @@ typedef struct {
 
 typedef struct {
     Position pos;
+    Direction facing;          // Current facing direction (for rendering)
     int health;
     int energy;
     int move_cooldown_ticks;   // 0 = can move

@@ -3,6 +3,7 @@
 
 #include <SDL.h>
 #include "../core/types.h"
+#include "sprites.h"
 
 // Rendering constants
 #define TILE_SIZE 32
@@ -19,6 +20,7 @@ typedef struct {
     SDL_Renderer* renderer;
     int window_width;
     int window_height;
+    SpriteSheet sprites;
 } RenderContext;
 
 // Initialize SDL and create window/renderer

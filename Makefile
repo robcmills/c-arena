@@ -19,7 +19,7 @@ SRCS = $(SRC_DIR)/arena.c \
 OBJS = $(SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
 # Render source files
-RENDER_SRCS = $(RENDER_DIR)/render.c $(RENDER_DIR)/screenshot.c
+RENDER_SRCS = $(RENDER_DIR)/render.c $(RENDER_DIR)/screenshot.c $(RENDER_DIR)/sprites.c
 RENDER_OBJS = $(RENDER_SRCS:$(RENDER_DIR)/%.c=$(BUILD_DIR)/%.o)
 
 # Library name
@@ -66,10 +66,13 @@ $(BUILD_DIR)/render.o: $(RENDER_DIR)/render.c
 $(BUILD_DIR)/screenshot.o: $(RENDER_DIR)/screenshot.c
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -I$(SRC_DIR) -c $< -o $@
 
+$(BUILD_DIR)/sprites.o: $(RENDER_DIR)/sprites.c
+	$(CC) $(CFLAGS) $(SDL_CFLAGS) -I$(SRC_DIR) -c $< -o $@
+
 $(BUILD_DIR)/main_render.o: $(RENDER_DIR)/main.c
 	$(CC) $(CFLAGS) $(SDL_CFLAGS) -I$(SRC_DIR) -c $< -o $@
 
-$(RENDER_BIN): $(OBJS) $(BUILD_DIR)/render.o $(BUILD_DIR)/screenshot.o $(BUILD_DIR)/main_render.o
+$(RENDER_BIN): $(OBJS) $(BUILD_DIR)/render.o $(BUILD_DIR)/screenshot.o $(BUILD_DIR)/sprites.o $(BUILD_DIR)/main_render.o
 	$(CC) $(CFLAGS) -o $@ $^ $(SDL_LDFLAGS)
 
 # Test runner

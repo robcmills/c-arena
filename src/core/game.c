@@ -273,6 +273,11 @@ void game_phase_movement(GameState* state, const PlayerAction actions[MAX_PLAYER
     // Apply movements
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (wants_move[i]) {
+            // Update facing direction based on movement
+            Direction move_dir = action_to_direction(actions[i].move);
+            if (move_dir != DIR_NONE) {
+                state->players[i].facing = move_dir;
+            }
             // Check for void death
             if (arena_is_void(&state->arena, intended[i].x, intended[i].y)) {
                 state->players[i].alive = false;
@@ -282,9 +287,10 @@ void game_phase_movement(GameState* state, const PlayerAction actions[MAX_PLAYER
             }
             player_start_move_cooldown(&state->players[i]);
         } else if (actions[i].move != ACTION_NOOP && state->players[i].alive) {
-            // Tried to move but was blocked - still start cooldown
+            // Tried to move but was blocked - still start cooldown and update facing
             Direction move_dir = action_to_direction(actions[i].move);
             if (move_dir != DIR_NONE && player_can_move(&state->players[i])) {
+                state->players[i].facing = move_dir;
                 player_start_move_cooldown(&state->players[i]);
             }
         }

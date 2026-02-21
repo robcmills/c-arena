@@ -1,4 +1,5 @@
 #include "render.h"
+#include <SDL_image.h>
 #include <stdio.h>
 
 // Color definitions
@@ -24,6 +25,14 @@ int render_init(RenderContext* ctx, int arena_width, int arena_height) {
         return -1;
     }
 
+    // Initialize SDL_image for PNG loading
+    int img_flags = IMG_INIT_PNG;
+    if (!(IMG_Init(img_flags) & img_flags)) {
+        fprintf(stderr, "SDL_image init failed: %s\n", IMG_GetError());
+        SDL_Quit();
+        return -1;
+    }
+
     ctx->window_width = arena_width * TILE_SIZE;
     ctx->window_height = arena_height * TILE_SIZE + HUD_HEIGHT;
 
@@ -38,6 +47,7 @@ int render_init(RenderContext* ctx, int arena_width, int arena_height) {
 
     if (!ctx->window) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        IMG_Quit();
         SDL_Quit();
         return -1;
     }
@@ -50,14 +60,21 @@ int render_init(RenderContext* ctx, int arena_width, int arena_height) {
     if (!ctx->renderer) {
         fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
         SDL_DestroyWindow(ctx->window);
+        IMG_Quit();
         SDL_Quit();
         return -1;
+    }
+
+    // Load sprite sheet (fallback to primitive rendering if this fails)
+    if (sprites_load(&ctx->sprites, ctx->renderer, "assets/sprites.png") < 0) {
+        fprintf(stderr, "Warning: Failed to load sprites, using fallback rendering\n");
     }
 
     return 0;
 }
 
 void render_cleanup(RenderContext* ctx) {
+    sprites_cleanup(&ctx->sprites);
     if (ctx->renderer) {
         SDL_DestroyRenderer(ctx->renderer);
         ctx->renderer = NULL;
@@ -66,32 +83,37 @@ void render_cleanup(RenderContext* ctx) {
         SDL_DestroyWindow(ctx->window);
         ctx->window = NULL;
     }
+    IMG_Quit();
     SDL_Quit();
 }
 
 void render_arena(RenderContext* ctx, const Arena* arena) {
     for (int y = 0; y < arena->height; y++) {
         for (int x = 0; x < arena->width; x++) {
-            SDL_Rect tile_rect = {
-                x * TILE_SIZE,
-                y * TILE_SIZE,
-                TILE_SIZE - 1,
-                TILE_SIZE - 1
-            };
+            int screen_x = x * TILE_SIZE;
+            int screen_y = y * TILE_SIZE;
 
-            switch (arena->tiles[y][x]) {
-                case TILE_FLOOR:
-                    set_draw_color(ctx->renderer, COLOR_FLOOR);
-                    break;
-                case TILE_WALL:
-                    set_draw_color(ctx->renderer, COLOR_WALL);
-                    break;
-                case TILE_VOID:
-                    set_draw_color(ctx->renderer, COLOR_VOID);
-                    break;
+            if (ctx->sprites.loaded) {
+                SpriteIndex sprite = sprite_for_tile(arena->tiles[y][x]);
+                sprites_render(ctx->renderer, &ctx->sprites, sprite, screen_x, screen_y);
+            } else {
+                // Fallback to primitive rendering
+                SDL_Rect tile_rect = {screen_x, screen_y, TILE_SIZE - 1, TILE_SIZE - 1};
+
+                switch (arena->tiles[y][x]) {
+                    case TILE_FLOOR:
+                        set_draw_color(ctx->renderer, COLOR_FLOOR);
+                        break;
+                    case TILE_WALL:
+                        set_draw_color(ctx->renderer, COLOR_WALL);
+                        break;
+                    case TILE_VOID:
+                        set_draw_color(ctx->renderer, COLOR_VOID);
+                        break;
+                }
+
+                SDL_RenderFillRect(ctx->renderer, &tile_rect);
             }
-
-            SDL_RenderFillRect(ctx->renderer, &tile_rect);
         }
     }
 }
@@ -99,34 +121,42 @@ void render_arena(RenderContext* ctx, const Arena* arena) {
 void render_crystals(RenderContext* ctx, const Arena* arena) {
     for (int i = 0; i < arena->num_crystals; i++) {
         const Crystal* crystal = &arena->crystals[i];
+        int screen_x = crystal->pos.x * TILE_SIZE;
+        int screen_y = crystal->pos.y * TILE_SIZE;
 
-        // Diamond shape for crystal
-        int cx = crystal->pos.x * TILE_SIZE + TILE_SIZE / 2;
-        int cy = crystal->pos.y * TILE_SIZE + TILE_SIZE / 2;
-        int size = TILE_SIZE / 3;
-
-        if (crystal->cooldown_ticks > 0) {
-            set_draw_color(ctx->renderer, COLOR_CRYSTAL_COOLDOWN);
+        if (ctx->sprites.loaded) {
+            bool on_cooldown = (crystal->cooldown_ticks > 0);
+            SpriteIndex sprite = sprite_for_crystal(on_cooldown);
+            sprites_render(ctx->renderer, &ctx->sprites, sprite, screen_x, screen_y);
         } else {
-            set_draw_color(ctx->renderer, COLOR_CRYSTAL);
-        }
+            // Fallback to primitive rendering
+            int cx = screen_x + TILE_SIZE / 2;
+            int cy = screen_y + TILE_SIZE / 2;
+            int size = TILE_SIZE / 3;
 
-        // Draw diamond as 4 triangles (approximated with lines)
-        SDL_Point points[5] = {
-            {cx, cy - size},      // top
-            {cx + size, cy},      // right
-            {cx, cy + size},      // bottom
-            {cx - size, cy},      // left
-            {cx, cy - size}       // back to top
-        };
-        SDL_RenderDrawLines(ctx->renderer, points, 5);
+            if (crystal->cooldown_ticks > 0) {
+                set_draw_color(ctx->renderer, COLOR_CRYSTAL_COOLDOWN);
+            } else {
+                set_draw_color(ctx->renderer, COLOR_CRYSTAL);
+            }
 
-        // Fill with smaller diamond
-        for (int dy = -size + 1; dy < size; dy++) {
-            int width = size - abs(dy);
-            SDL_RenderDrawLine(ctx->renderer,
-                cx - width, cy + dy,
-                cx + width, cy + dy);
+            // Draw diamond as 4 triangles (approximated with lines)
+            SDL_Point points[5] = {
+                {cx, cy - size},      // top
+                {cx + size, cy},      // right
+                {cx, cy + size},      // bottom
+                {cx - size, cy},      // left
+                {cx, cy - size}       // back to top
+            };
+            SDL_RenderDrawLines(ctx->renderer, points, 5);
+
+            // Fill with smaller diamond
+            for (int dy = -size + 1; dy < size; dy++) {
+                int width = size - abs(dy);
+                SDL_RenderDrawLine(ctx->renderer,
+                    cx - width, cy + dy,
+                    cx + width, cy + dy);
+            }
         }
     }
 }
@@ -134,41 +164,49 @@ void render_crystals(RenderContext* ctx, const Arena* arena) {
 void render_players(RenderContext* ctx, const Player players[MAX_PLAYERS]) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         const Player* player = &players[i];
+        int screen_x = player->pos.x * TILE_SIZE;
+        int screen_y = player->pos.y * TILE_SIZE;
 
-        int px = player->pos.x * TILE_SIZE + TILE_SIZE / 2;
-        int py = player->pos.y * TILE_SIZE + TILE_SIZE / 2;
-        int radius = TILE_SIZE / 3;
-
-        Color color;
-        if (!player->alive) {
-            color = COLOR_PLAYER_DEAD;
-        } else if (i == 0) {
-            color = COLOR_PLAYER1;
+        if (ctx->sprites.loaded) {
+            SpriteIndex sprite = sprite_for_player(i, player->facing, player->alive);
+            sprites_render(ctx->renderer, &ctx->sprites, sprite, screen_x, screen_y);
         } else {
-            color = COLOR_PLAYER2;
-        }
+            // Fallback to primitive rendering
+            int px = screen_x + TILE_SIZE / 2;
+            int py = screen_y + TILE_SIZE / 2;
+            int radius = TILE_SIZE / 3;
 
-        set_draw_color(ctx->renderer, color);
+            Color color;
+            if (!player->alive) {
+                color = COLOR_PLAYER_DEAD;
+            } else if (i == 0) {
+                color = COLOR_PLAYER1;
+            } else {
+                color = COLOR_PLAYER2;
+            }
 
-        // Draw filled circle (approximated)
-        for (int dy = -radius; dy <= radius; dy++) {
-            int dx = (int)SDL_sqrt(radius * radius - dy * dy);
-            SDL_RenderDrawLine(ctx->renderer,
-                px - dx, py + dy,
-                px + dx, py + dy);
-        }
+            set_draw_color(ctx->renderer, color);
 
-        // Draw player number
-        SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
-        // Simple "1" or "2" using lines
-        if (i == 0) {
-            SDL_RenderDrawLine(ctx->renderer, px, py - 4, px, py + 4);
-        } else {
-            SDL_RenderDrawLine(ctx->renderer, px - 3, py - 4, px + 3, py - 4);
-            SDL_RenderDrawLine(ctx->renderer, px + 3, py - 4, px + 3, py);
-            SDL_RenderDrawLine(ctx->renderer, px - 3, py, px + 3, py);
-            SDL_RenderDrawLine(ctx->renderer, px - 3, py, px - 3, py + 4);
-            SDL_RenderDrawLine(ctx->renderer, px - 3, py + 4, px + 3, py + 4);
+            // Draw filled circle (approximated)
+            for (int dy = -radius; dy <= radius; dy++) {
+                int dx = (int)SDL_sqrt(radius * radius - dy * dy);
+                SDL_RenderDrawLine(ctx->renderer,
+                    px - dx, py + dy,
+                    px + dx, py + dy);
+            }
+
+            // Draw player number
+            SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
+            // Simple "1" or "2" using lines
+            if (i == 0) {
+                SDL_RenderDrawLine(ctx->renderer, px, py - 4, px, py + 4);
+            } else {
+                SDL_RenderDrawLine(ctx->renderer, px - 3, py - 4, px + 3, py - 4);
+                SDL_RenderDrawLine(ctx->renderer, px + 3, py - 4, px + 3, py);
+                SDL_RenderDrawLine(ctx->renderer, px - 3, py, px + 3, py);
+                SDL_RenderDrawLine(ctx->renderer, px - 3, py, px - 3, py + 4);
+                SDL_RenderDrawLine(ctx->renderer, px - 3, py + 4, px + 3, py + 4);
+            }
         }
     }
 }
