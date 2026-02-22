@@ -18,14 +18,16 @@ typedef struct {
 typedef struct {
     SDL_Window* window;
     SDL_Renderer* renderer;
-    int window_width;
-    int window_height;
+    SDL_Texture* target;    // offscreen render target at native resolution
+    int window_width;       // native (unscaled) game width
+    int window_height;      // native (unscaled) game height
+    int scale;              // integer scale factor
     SpriteSheet sprites;
 } RenderContext;
 
 // Initialize SDL and create window/renderer
 // Returns 0 on success, -1 on failure
-int render_init(RenderContext* ctx, int arena_width, int arena_height);
+int render_init(RenderContext* ctx, int arena_width, int arena_height, int scale);
 
 // Cleanup SDL resources
 void render_cleanup(RenderContext* ctx);

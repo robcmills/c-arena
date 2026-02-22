@@ -6,6 +6,7 @@
 #include "render.h"
 #include "screenshot.h"
 #include "keymap.h"
+#include "config.h"
 
 // Tick rate in milliseconds (60 ticks per second)
 #define TICK_MS 16
@@ -34,9 +35,18 @@ int main(int argc, char* argv[]) {
            state.players[1].pos.x, state.players[1].pos.y);
     printf("Crystals: %d\n", state.arena.num_crystals);
 
+    // Load config
+    GameConfig config;
+    if (config_load(&config, "config.cfg") < 0) {
+        printf("No config.cfg found, using defaults\n");
+        config_load_defaults(&config);
+    } else {
+        printf("Loaded config from config.cfg (scale=%d)\n", config.scale);
+    }
+
     // Initialize renderer
     RenderContext ctx;
-    if (render_init(&ctx, state.arena.width, state.arena.height) < 0) {
+    if (render_init(&ctx, state.arena.width, state.arena.height, config.scale) < 0) {
         fprintf(stderr, "Failed to initialize renderer\n");
         return 1;
     }
@@ -64,6 +74,21 @@ int main(int argc, char* argv[]) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 running = false;
+            }
+            if (event.type == SDL_WINDOWEVENT &&
+                event.window.event == SDL_WINDOWEVENT_RESIZED) {
+                // Recalculate best integer scale that fits
+                int win_w = event.window.data1;
+                int win_h = event.window.data2;
+                int best = 1;
+                for (int s = 8; s >= 1; s--) {
+                    if (ctx.window_width * s <= win_w &&
+                        ctx.window_height * s <= win_h) {
+                        best = s;
+                        break;
+                    }
+                }
+                ctx.scale = best;
             }
             if (event.type == SDL_KEYDOWN && !event.key.repeat) {
                 SDL_Scancode sc = event.key.keysym.scancode;

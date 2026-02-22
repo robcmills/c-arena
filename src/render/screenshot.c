@@ -38,11 +38,10 @@ int screenshot_save(RenderContext* ctx) {
     char filename[256];
     generate_filename(filename, sizeof(filename));
 
-    // Get window surface dimensions
+    // Read from offscreen texture at native resolution
     int width = ctx->window_width;
     int height = ctx->window_height;
 
-    // Create a surface to hold the screenshot
     SDL_Surface* surface = SDL_CreateRGBSurface(0, width, height, 32,
                                                  0x00FF0000,  // R mask
                                                  0x0000FF00,  // G mask
@@ -53,15 +52,17 @@ int screenshot_save(RenderContext* ctx) {
         return -1;
     }
 
-    // Read pixels from the renderer
+    // Read pixels from the offscreen render target
+    SDL_SetRenderTarget(ctx->renderer, ctx->target);
     if (SDL_RenderReadPixels(ctx->renderer, NULL, SDL_PIXELFORMAT_ARGB8888,
                              surface->pixels, surface->pitch) != 0) {
         fprintf(stderr, "Failed to read pixels: %s\n", SDL_GetError());
+        SDL_SetRenderTarget(ctx->renderer, NULL);
         SDL_FreeSurface(surface);
         return -1;
     }
+    SDL_SetRenderTarget(ctx->renderer, NULL);
 
-    // Save as PNG
     if (IMG_SavePNG(surface, filename) != 0) {
         fprintf(stderr, "Failed to save PNG: %s\n", IMG_GetError());
         SDL_FreeSurface(surface);

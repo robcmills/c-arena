@@ -19,7 +19,7 @@ static void set_draw_color(SDL_Renderer* renderer, Color c) {
     SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
 }
 
-int render_init(RenderContext* ctx, int arena_width, int arena_height) {
+int render_init(RenderContext* ctx, int arena_width, int arena_height, int scale) {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return -1;
@@ -33,16 +33,20 @@ int render_init(RenderContext* ctx, int arena_width, int arena_height) {
         return -1;
     }
 
+    // Nearest-neighbor scaling for crisp pixel art
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+
     ctx->window_width = arena_width * TILE_SIZE;
     ctx->window_height = arena_height * TILE_SIZE + HUD_HEIGHT;
+    ctx->scale = scale;
 
     ctx->window = SDL_CreateWindow(
         "Arena",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
-        ctx->window_width,
-        ctx->window_height,
-        SDL_WINDOW_SHOWN
+        ctx->window_width * scale,
+        ctx->window_height * scale,
+        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
     );
 
     if (!ctx->window) {
@@ -54,11 +58,29 @@ int render_init(RenderContext* ctx, int arena_width, int arena_height) {
 
     ctx->renderer = SDL_CreateRenderer(
         ctx->window, -1,
-        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
+        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_TARGETTEXTURE
     );
 
     if (!ctx->renderer) {
         fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
+        SDL_DestroyWindow(ctx->window);
+        IMG_Quit();
+        SDL_Quit();
+        return -1;
+    }
+
+    // Create offscreen render target at native resolution
+    ctx->target = SDL_CreateTexture(
+        ctx->renderer,
+        SDL_PIXELFORMAT_RGBA8888,
+        SDL_TEXTUREACCESS_TARGET,
+        ctx->window_width,
+        ctx->window_height
+    );
+
+    if (!ctx->target) {
+        fprintf(stderr, "SDL_CreateTexture (target) failed: %s\n", SDL_GetError());
+        SDL_DestroyRenderer(ctx->renderer);
         SDL_DestroyWindow(ctx->window);
         IMG_Quit();
         SDL_Quit();
@@ -75,6 +97,10 @@ int render_init(RenderContext* ctx, int arena_width, int arena_height) {
 
 void render_cleanup(RenderContext* ctx) {
     sprites_cleanup(&ctx->sprites);
+    if (ctx->target) {
+        SDL_DestroyTexture(ctx->target);
+        ctx->target = NULL;
+    }
     if (ctx->renderer) {
         SDL_DestroyRenderer(ctx->renderer);
         ctx->renderer = NULL;
@@ -316,17 +342,43 @@ void render_lasers(RenderContext* ctx, const GameState* state) {
 }
 
 void render_game(RenderContext* ctx, const GameState* state) {
-    // Clear screen
+    // Render to offscreen texture at native resolution
+    SDL_SetRenderTarget(ctx->renderer, ctx->target);
     SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
     SDL_RenderClear(ctx->renderer);
 
-    // Render all layers
     render_arena(ctx, &state->arena);
     render_crystals(ctx, &state->arena);
     render_lasers(ctx, state);
     render_players(ctx, state->players);
     render_hud(ctx, state);
 
-    // Present
+    // Switch to window and blit scaled texture
+    SDL_SetRenderTarget(ctx->renderer, NULL);
+    SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
+    SDL_RenderClear(ctx->renderer);
+
+    // Compute integer-scaled centered rect
+    int win_w, win_h;
+    SDL_GetWindowSize(ctx->window, &win_w, &win_h);
+
+    int fit_scale = 1;
+    for (int s = ctx->scale; s >= 1; s--) {
+        if (ctx->window_width * s <= win_w && ctx->window_height * s <= win_h) {
+            fit_scale = s;
+            break;
+        }
+    }
+
+    int scaled_w = ctx->window_width * fit_scale;
+    int scaled_h = ctx->window_height * fit_scale;
+    SDL_Rect dst = {
+        (win_w - scaled_w) / 2,
+        (win_h - scaled_h) / 2,
+        scaled_w,
+        scaled_h
+    };
+
+    SDL_RenderCopy(ctx->renderer, ctx->target, NULL, &dst);
     SDL_RenderPresent(ctx->renderer);
 }
